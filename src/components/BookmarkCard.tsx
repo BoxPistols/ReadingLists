@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Bookmark } from '../types';
-import { ExternalLink, Calendar, Plus, X } from 'lucide-react';
+import { ExternalLink, Calendar, Tag as TagIcon, Plus, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -15,6 +15,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onAddTag, 
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState('');
 
+  const ogpImage = bookmark.ogp?.image;
+
   const handleAddTagSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTag.trim()) {
@@ -25,77 +27,101 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onAddTag, 
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start gap-4">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col">
+      {/* OGP Image */}
+      <div className="aspect-video w-full bg-gray-100 relative overflow-hidden group">
+        {ogpImage ? (
+          <img 
+            src={ogpImage} 
+            alt={bookmark.title}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-300">
+            <TagIcon size={48} strokeWidth={1} />
+          </div>
+        )}
+        <div className="absolute top-2 right-2">
+          <a 
+            href={bookmark.url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="p-2 bg-white/90 backdrop-blur rounded-full shadow-sm text-gray-600 hover:text-blue-600 transition-colors"
+          >
+            <ExternalLink size={18} />
+          </a>
+        </div>
+      </div>
+
+      <div className="p-4 flex-1 flex flex-col">
         <div className="flex-1 min-w-0">
           <a 
             href={bookmark.url} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-lg font-medium text-gray-900 hover:text-blue-600 truncate block"
+            className="text-lg font-medium text-gray-900 hover:text-blue-600 line-clamp-2 mb-1"
             title={bookmark.title}
           >
-            {bookmark.title || bookmark.url}
+            {bookmark.ogp?.title || bookmark.title || bookmark.url}
           </a>
-          <p className="text-sm text-gray-500 truncate mt-1 font-mono">
+          <p className="text-sm text-gray-500 truncate font-mono mb-2">
             {bookmark.url}
           </p>
-        </div>
-        <a 
-          href={bookmark.url} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-gray-400 hover:text-gray-600 flex-shrink-0"
-        >
-          <ExternalLink size={20} />
-        </a>
-      </div>
-      
-      <div className="mt-4 flex flex-wrap items-center gap-y-2 gap-x-4">
-        <div className="flex items-center text-xs text-gray-400">
-          <Calendar size={14} className="mr-1" />
-          <span>{format(date, 'yyyy年MM月dd日 HH:mm', { locale: ja })}</span>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {bookmark.tags?.map((tag, idx) => (
-            <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-              {tag}
-              <button 
-                onClick={() => onRemoveTag(tag)}
-                className="ml-1 text-blue-600 hover:text-blue-900 focus:outline-none"
-              >
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-
-          {isAddingTag ? (
-            <form onSubmit={handleAddTagSubmit} className="flex items-center">
-              <input
-                type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                className="w-24 text-xs border border-gray-300 rounded px-1 py-0.5 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="New tag..."
-                autoFocus
-                onBlur={() => {
-                   // Delay hiding so form submission can happen if clicked/entered
-                   setTimeout(() => {
-                     if (!newTag) setIsAddingTag(false); 
-                   }, 100);
-                }}
-              />
-            </form>
-          ) : (
-            <button
-              onClick={() => setIsAddingTag(true)}
-              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-gray-500 hover:bg-gray-100 transition-colors"
-            >
-              <Plus size={12} className="mr-1" />
-              Tag
-            </button>
+          {bookmark.ogp?.description && (
+            <p className="text-xs text-gray-400 line-clamp-2 mb-4">
+              {bookmark.ogp.description}
+            </p>
           )}
+        </div>
+        
+        <div className="mt-auto flex flex-wrap items-center gap-y-2 gap-x-4 pt-4 border-t border-gray-50">
+          <div className="flex items-center text-[10px] text-gray-400">
+            <Calendar size={12} className="mr-1" />
+            <span>{format(date, 'yyyy/MM/dd', { locale: ja })}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {bookmark.tags?.map((tag, idx) => (
+              <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                {tag}
+                <button 
+                  onClick={() => onRemoveTag(tag)}
+                  className="ml-1 text-blue-400 hover:text-blue-600 focus:outline-none"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+
+            {isAddingTag ? (
+              <form onSubmit={handleAddTagSubmit} className="flex items-center">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  className="w-20 text-[10px] border border-gray-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-blue-500 outline-none"
+                  placeholder="New tag..."
+                  autoFocus
+                  onBlur={() => {
+                     setTimeout(() => {
+                       if (!newTag) setIsAddingTag(false); 
+                     }, 100);
+                  }}
+                />
+              </form>
+            ) : (
+              <button
+                onClick={() => setIsAddingTag(true)}
+                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium text-gray-400 hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+              >
+                <Plus size={10} className="mr-0.5" />
+                Tag
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

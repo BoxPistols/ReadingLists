@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Bookmark, ViewMode } from './types';
 import { parseBookmarks } from './utils/parser';
+import { fetchOGP } from './utils/ogp';
 import { generateBookmarkHtml, downloadHtml } from './utils/exporter';
 import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
 import { HelpModal } from './components/HelpModal';
-import { BookOpen, HelpCircle, Download } from 'lucide-react';
+import { HelpCircle, Download } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { clsx } from 'clsx';
 
@@ -26,6 +27,40 @@ function App() {
     const parsed = parseBookmarks(content);
     setBookmarks(parsed);
   };
+
+  // OGP fetcher logic
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      // まだ読み込まれていないものを抽出 (最大5つずつ並行実行)
+      const pending = bookmarks.filter(b => !b.ogp?.loaded);
+      if (pending.length === 0) return;
+
+      const batchSize = 3;
+      for (let i = 0; i < pending.length; i += batchSize) {
+        const batch = pending.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (b) => {
+          const ogpData = await fetchOGP(b.url);
+          setBookmarks(prev => prev.map(item => {
+            if (item.url === b.url) {
+              return { 
+                ...item, 
+                ogp: { ...ogpData, loaded: true } 
+              };
+            }
+            return item;
+          }));
+        }));
+        
+        // 少し待機してプロキシへの負荷を軽減
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    };
+
+    if (bookmarks.length > 0) {
+      fetchMetadata();
+    }
+  }, [bookmarks.filter(b => !b.ogp?.loaded).length > 0]);
 
   const handleExport = () => {
     const html = generateBookmarkHtml(bookmarks);
@@ -89,11 +124,11 @@ function App() {
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <BookOpen className="text-white w-6 h-6" />
+            <div className="bg-blue-600 p-1.5 rounded-lg w-10 h-10 flex items-center justify-center overflow-hidden shadow-sm">
+              <img src="/icon.svg" alt="Logo" className="w-full h-full scale-110" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Reading List Manager</h1>
           </div>

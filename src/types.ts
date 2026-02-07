@@ -6,6 +6,12 @@ export interface Bookmark {
   icon?: string;
   tags?: string[];
   image?: string;
+  ogp?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    loaded?: boolean;
+  };
 }
 
 export type ViewMode = 'list' | 'grid';
