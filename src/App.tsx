@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
-import type { Bookmark, ViewMode } from './types';
+import type { ViewMode } from './types';
 import { parseBookmarks } from './utils/parser';
 import { fetchOGP } from './utils/ogp';
 import { UploadArea } from './components/UploadArea';

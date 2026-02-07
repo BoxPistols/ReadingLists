@@ -32,7 +32,6 @@ export const fetchOGP = async (url: string): Promise<OGPData | null> => {
              doc.querySelector(`meta[name="${property}"]`)?.getAttribute('content');
     };
 
-    const baseUrl = new URL(url);
     const resolveUrl = (relUrl: string | null | undefined) => {
       if (!relUrl) return undefined;
       if (relUrl.startsWith('http')) return relUrl;

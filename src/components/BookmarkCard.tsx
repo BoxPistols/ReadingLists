@@ -3,7 +3,7 @@ import type { Bookmark, ViewMode } from '../types';
 import { ExternalLink, Calendar, Tag, Plus, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { clsx } from 'clsx';
+
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
