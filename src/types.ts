@@ -5,4 +5,7 @@ export interface Bookmark {
   lastModified?: number;
   icon?: string;
   tags?: string[];
+  image?: string;
 }
+
+export type ViewMode = 'list' | 'grid';

@@ -1,0 +1,16 @@
+{
+  "name": "Reading List Manager",
+  "short_name": "ReadingList",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "theme_color": "#2563eb",
+  "background_color": "#f9fafb",
+  "display": "standalone",
+  "start_url": "/"
+}

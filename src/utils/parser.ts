@@ -11,9 +11,11 @@ export const parseBookmarks = (htmlContent: string): Bookmark[] => {
     const addDateStr = link.getAttribute('add_date');
     const lastModifiedStr = link.getAttribute('last_modified');
     const icon = link.getAttribute('icon');
+    const tagsStr = link.getAttribute('tags');
 
     const addDate = addDateStr ? parseInt(addDateStr, 10) : 0;
     const lastModified = lastModifiedStr ? parseInt(lastModifiedStr, 10) : undefined;
+    const tags = tagsStr ? tagsStr.split(',').filter(Boolean) : [];
 
     return {
       title,
@@ -21,6 +23,7 @@ export const parseBookmarks = (htmlContent: string): Bookmark[] => {
       addDate,
       lastModified,
       icon: icon || undefined,
+      tags,
     };
   }).filter(b => b.url); // URLがないものは除外
 };

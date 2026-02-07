@@ -1,0 +1,79 @@
+---
+description: Design system rules and patterns for integrating Figma designs into the Reading List project.
+globs: src/**/*.{tsx,ts,css}
+---
+
+# Design System Rules
+
+This document defines the architectural patterns, styling methodologies, and integration rules for the Reading List project.
+
+## 1. Design System Structure
+
+### Token Definitions
+- **System**: Tailwind CSS v4 (Standard utility-based tokens).
+- **Customization**: Defined in `src/index.css` via `@theme` block (if applicable).
+- **Core Colors**: 
+  - Primary: `blue-600` (#2563eb)
+  - Surface: `white` (#ffffff)
+  - Background: `gray-50` (#f9fafb)
+  - Border: `gray-200` (#e5e7eb)
+  - Text: `gray-900` (Title), `gray-500` (Description)
+
+### Component Library
+- **Location**: `src/components/*.tsx`
+- **Pattern**: Function-based components with TypeScript interfaces for props.
+- **Example**:
+  ```tsx
+  interface Props { ... }
+  export const Component: React.FC<Props> = ({ ... }) => { ... }
+  ```
+
+## 2. Frameworks & Libraries
+- **Framework**: React 19 (Functional components, Hooks).
+- **Styling**: Tailwind CSS v4 (Utility-first).
+- **Icons**: Lucide React (Standard size: 20px for UI, 14px for metadata).
+- **Utils**: `clsx` for conditional class merging.
+
+## 3. Styling Approach
+- **Methodology**: Utility-first CSS using Tailwind classes directly in `className`.
+- **Dynamic Classes**: Use `clsx` for complex conditional logic.
+- **Responsive Design**: 
+  - Default: Mobile-first.
+  - Breakpoints: `sm` (640px), `md` (768px), `lg` (1024px).
+- **Transitions**: Use `transition-all` or `transition-colors` with `duration-200` or `duration-300` for hover effects.
+
+## 4. View Modes (List & Grid)
+The application supports two primary view modes:
+- **List View**: Vertical stack using `space-y-4`. Optimized for information density.
+- **Grid View**: Responsive grid using `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6`. Optimized for visual browsing.
+
+### Card Design Patterns
+- **Grid Card**: Aspect ratio `video` (16:9) for thumbnails, `line-clamp-2` for titles.
+- **List Card**: Horizontal layout, 96x64px thumbnail, single-line title with `truncate`.
+
+## 5. Asset Management & OGP
+- **Thumbnails**: Fetched via OGP or fallback service (e.g., Microlink).
+- **Implementation**:
+  ```tsx
+  const thumbnailUrl = image || `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&embed=screenshot.url`;
+  ```
+- **Fallbacks**: Always provide an `onError` handler for images to show a placeholder.
+
+## 6. Icon System
+- **Library**: `lucide-react`
+- **Naming**: Use semantic names (e.g., `ExternalLink` for links, `Calendar` for dates).
+- **Usage**: Consistent sizing within the same context (e.g., 18px for grid card actions).
+
+## 7. Project Structure
+- `src/components/`: UI components.
+- `src/utils/`: Logic like parsers or formatters.
+- `src/types.ts`: Centralized TypeScript interfaces.
+- `src/assets/`: Static local assets.
+
+## 8. Figma Integration Guidelines
+When converting Figma designs to code:
+1. **Layout**: Map Figma Auto Layout to Tailwind `flex` or `grid`.
+2. **Spacing**: Round pixel values to the nearest Tailwind spacing unit (e.g., 16px -> `p-4`).
+3. **Typography**: Map Figma font weights (e.g., Semibold) to `font-semibold`.
+4. **Shadows**: Use `shadow-sm` or `shadow-md` for elevations.
+5. **Components**: Map Figma components to React components in `src/components/`.

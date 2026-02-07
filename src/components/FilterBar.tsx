@@ -1,5 +1,7 @@
 import React from 'react';
-import { Search, ArrowUpDown, Calendar } from 'lucide-react';
+import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid } from 'lucide-react';
+import type { ViewMode } from '../types';
+import { clsx } from 'clsx';
 
 export interface FilterState {
   search: string;
@@ -12,10 +14,18 @@ export interface FilterState {
 interface FilterBarProps {
   filter: FilterState;
   onChange: (filter: FilterState) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
   totalCount: number;
 }
 
-export const FilterBar: React.FC<FilterBarProps> = ({ filter, onChange, totalCount }) => {
+export const FilterBar: React.FC<FilterBarProps> = ({ 
+  filter, 
+  onChange, 
+  viewMode, 
+  onViewModeChange, 
+  totalCount 
+}) => {
   const handleChange = (key: keyof FilterState, value: string) => {
     onChange({ ...filter, [key]: value });
   };
@@ -35,25 +45,50 @@ export const FilterBar: React.FC<FilterBarProps> = ({ filter, onChange, totalCou
           />
         </div>
 
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <ArrowUpDown size={20} className="text-gray-400" />
-          <select
-            value={filter.sortBy}
-            onChange={(e) => handleChange('sortBy', e.target.value as 'date' | 'title')}
-            className="border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="date">Date Added</option>
-            <option value="title">Title</option>
-          </select>
-          <select
-            value={filter.sortOrder}
-            onChange={(e) => handleChange('sortOrder', e.target.value as 'asc' | 'desc')}
-            className="border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="desc">Newest First</option>
-            <option value="asc">Oldest First</option>
-          </select>
+        {/* Layout Toggle & Sort */}
+        <div className="flex items-center gap-4">
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => onViewModeChange('list')}
+              className={clsx(
+                "p-1.5 rounded-md transition-all",
+                viewMode === 'list' ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"
+              )}
+              title="List View"
+            >
+              <LayoutList size={20} />
+            </button>
+            <button
+              onClick={() => onViewModeChange('grid')}
+              className={clsx(
+                "p-1.5 rounded-md transition-all",
+                viewMode === 'grid' ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"
+              )}
+              title="Grid View"
+            >
+              <LayoutGrid size={20} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <ArrowUpDown size={20} className="text-gray-400" />
+            <select
+              value={filter.sortBy}
+              onChange={(e) => handleChange('sortBy', e.target.value as 'date' | 'title')}
+              className="border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="date">Date</option>
+              <option value="title">Title</option>
+            </select>
+            <select
+              value={filter.sortOrder}
+              onChange={(e) => handleChange('sortOrder', e.target.value as 'asc' | 'desc')}
+              className="border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="desc">Newest</option>
+              <option value="asc">Oldest</option>
+            </select>
+          </div>
         </div>
       </div>
 
