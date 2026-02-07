@@ -47,6 +47,7 @@ function App() {
   const bookmarks = useLiveQuery(() => db.bookmarks.toArray()) || [];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   
   // Default to 365 days ago
   const defaultStartDate = useMemo(() => format(subDays(new Date(), 365), 'yyyy-MM-dd'), []);
@@ -100,37 +101,36 @@ function App() {
     }
   };
 
-  const processingIds = useMemo(() => new Set<number>(), []);
-
-  // OGP fetcher
+  // OGP fetcher with race condition protection
   useEffect(() => {
-    const fetchMetadata = async () => {
-      const pending = bookmarks.filter(b => b.id && !b.ogp?.loaded && !processingIds.has(b.id)).slice(0, 5);
+    if (isFetchingMetadata) return;
+
+    const fetchMetadataBatch = async () => {
+      const pending = bookmarks.filter(b => b.id && !b.ogp?.loaded).slice(0, 5);
       if (pending.length === 0) return;
 
-      // Mark as processing
-      pending.forEach(b => b.id && processingIds.add(b.id));
-
-      for (const b of pending) {
-        if (!b.id) continue;
-        try {
-          const ogpData = await fetchOGP(b.url);
-          await db.bookmarks.update(b.id, { 
-            ogp: { ...(ogpData || {}), loaded: true } 
-          });
-        } catch (e) {
-          console.error(e);
-          await db.bookmarks.update(b.id, { ogp: { loaded: true } });
-        } finally {
-          processingIds.delete(b.id);
+      setIsFetchingMetadata(true);
+      try {
+        for (const b of pending) {
+          if (!b.id) continue;
+          try {
+            const ogpData = await fetchOGP(b.url);
+            await db.bookmarks.update(b.id, { 
+              ogp: { ...(ogpData || {}), loaded: true } 
+            });
+          } catch (e) {
+            await db.bookmarks.update(b.id, { ogp: { loaded: true } });
+          }
+          // Throttling to be polite and avoid rate limits
+          await new Promise(resolve => setTimeout(resolve, 800));
         }
-        // Throttling
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      } finally {
+        setIsFetchingMetadata(false);
       }
     };
 
-    fetchMetadata();
-  }, [bookmarks.filter(b => !b.ogp?.loaded).length]);
+    fetchMetadataBatch();
+  }, [bookmarks.filter(b => !b.ogp?.loaded).length, isFetchingMetadata]);
 
   const availableTags = useMemo(() => {
     const tags = new Set<string>();
@@ -259,6 +259,12 @@ function App() {
                    Import More
                  </button>
                </div>
+               {isFetchingMetadata && (
+                 <div className="flex items-center gap-2 text-xs text-blue-600 font-medium animate-pulse">
+                   <RefreshCw size={12} className="animate-spin" />
+                   Updating bookmark info...
+                 </div>
+               )}
             </div>
             
             <FilterBar 

@@ -23,8 +23,14 @@ app.get('/api/proxy', async (req, res) => {
     });
     res.send(response.data);
   } catch (error) {
-    console.error(`Error fetching ${targetUrl}:`, error.message);
-    res.status(500).send('Failed to fetch the URL');
+    const status = error.response?.status;
+    if (status === 404) {
+      // 404はよくあることなので、警告程度に留める
+      console.warn(`[Proxy] 404 Not Found: ${targetUrl}`);
+    } else {
+      console.error(`[Proxy] Error ${status || 'unknown'} fetching ${targetUrl}: ${error.message}`);
+    }
+    res.status(status || 500).send('Failed to fetch the URL');
   }
 });
 
