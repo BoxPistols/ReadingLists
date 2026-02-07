@@ -3,7 +3,7 @@ import cors from 'cors';
 import axios from 'axios';
 
 const app = express();
-const PORT = 3001;
+const PORT = 3005;
 
 app.use(cors());
 
@@ -25,6 +25,28 @@ app.get('/api/proxy', async (req, res) => {
   } catch (error) {
     console.error(`Error fetching ${targetUrl}:`, error.message);
     res.status(500).send('Failed to fetch the URL');
+  }
+});
+
+app.get('/api/favicon', async (req, res) => {
+  const domain = req.query.domain;
+  if (!domain) return res.status(400).send('Domain is required');
+
+  const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  
+  try {
+    const response = await axios.get(googleFaviconUrl, {
+      responseType: 'arraybuffer',
+      timeout: 3000
+    });
+    res.set('Content-Type', response.headers['content-type']);
+    res.send(response.data);
+  } catch (error) {
+    // 失敗した場合は透明な1x1ピクセル、または適当なデフォルトアイコンを返す
+    // ここでは1x1の透明なPNGを返すことでエラーを回避
+    const transparentPixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    res.set('Content-Type', 'image/png');
+    res.send(transparentPixel);
   }
 });
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid } from 'lucide-react';
+import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid, Tag, X } from 'lucide-react';
 import type { ViewMode } from '../types';
 import { clsx } from 'clsx';
 
@@ -9,6 +9,7 @@ export interface FilterState {
   sortOrder: 'asc' | 'desc';
   startDate: string;
   endDate: string;
+  selectedTag: string;
 }
 
 interface FilterBarProps {
@@ -17,6 +18,7 @@ interface FilterBarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   totalCount: number;
+  availableTags: string[];
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({ 
@@ -24,7 +26,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onChange, 
   viewMode, 
   onViewModeChange, 
-  totalCount 
+  totalCount,
+  availableTags
 }) => {
   const handleChange = (key: keyof FilterState, value: string) => {
     onChange({ ...filter, [key]: value });
@@ -37,11 +40,20 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
         <input
           type="text"
-          placeholder="Search your reading list..."
+          placeholder="Search (e.g. 'A B' for AND search)..."
           value={filter.search}
           onChange={(e) => handleChange('search', e.target.value)}
-          className="w-full pl-11 pr-4 py-3 bg-gray-50/50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-sm"
+          className="w-full pl-11 pr-11 py-3 bg-gray-50/50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-sm"
         />
+        {filter.search && (
+          <button
+            onClick={() => handleChange('search', '')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 rounded-full transition-colors"
+            title="Clear search"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar py-1">
@@ -61,6 +73,23 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             onChange={(e) => handleChange('endDate', e.target.value)}
             className="bg-transparent text-xs outline-none text-gray-600 cursor-pointer"
           />
+        </div>
+
+        <div className="h-8 w-px bg-gray-100 mx-1 hidden md:block" />
+
+        {/* Tag Filter */}
+        <div className="flex items-center gap-1.5 bg-gray-50/50 p-1 rounded-xl border border-transparent">
+          <Tag size={16} className="text-gray-400 ml-2" />
+          <select
+            value={filter.selectedTag}
+            onChange={(e) => handleChange('selectedTag', e.target.value)}
+            className="bg-transparent text-xs font-medium text-gray-600 px-2 py-1 cursor-pointer outline-none min-w-[100px]"
+          >
+            <option value="">All Tags</option>
+            {availableTags.map(tag => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
         </div>
 
         <div className="h-8 w-px bg-gray-100 mx-1 hidden md:block" />

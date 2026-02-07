@@ -1,10 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from './db';
 import type { Bookmark, ViewMode } from './types';
 import { parseBookmarks } from './utils/parser';
-import { UploadArea } from './UploadArea';
+import { fetchOGP } from './utils/ogp';
+import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
-import { Download, HelpCircle, Globe } from 'lucide-react';
+import { Download, HelpCircle, Globe, Trash2, RefreshCw, Plus } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval, format, subDays } from 'date-fns';
 import { clsx } from 'clsx';
 
@@ -41,7 +44,7 @@ const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
 };
 
 function App() {
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const bookmarks = useLiveQuery(() => db.bookmarks.toArray()) || [];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   
@@ -57,9 +60,9 @@ function App() {
     selectedTag: '',
   });
 
-  const handleFileLoaded = (content: string) => {
+  const handleFileLoaded = async (content: string) => {
     const parsed = parseBookmarks(content);
-    setBookmarks(parsed);
+    await db.bookmarks.bulkPut(parsed);
   };
 
   const handleExport = () => {
@@ -72,26 +75,62 @@ function App() {
     a.click();
   };
 
-  const handleAddTag = (bookmarkUrl: string, tag: string) => {
-    setBookmarks(prev => prev.map(b => {
-      if (b.url === bookmarkUrl) {
-        const currentTags = b.tags || [];
-        if (!currentTags.includes(tag)) {
-          return { ...b, tags: [...currentTags, tag] };
-        }
+  const handleAddTag = async (id: number, tag: string) => {
+    const bookmark = await db.bookmarks.get(id);
+    if (bookmark) {
+      const currentTags = bookmark.tags || [];
+      if (!currentTags.includes(tag)) {
+        await db.bookmarks.update(id, { tags: [...currentTags, tag] });
       }
-      return b;
-    }));
+    }
   };
 
-  const handleRemoveTag = (bookmarkUrl: string, tagToRemove: string) => {
-    setBookmarks(prev => prev.map(b => {
-      if (b.url === bookmarkUrl) {
-        return { ...b, tags: (b.tags || []).filter(t => t !== tagToRemove) };
-      }
-      return b;
-    }));
+  const handleRemoveTag = async (id: number, tagToRemove: string) => {
+    const bookmark = await db.bookmarks.get(id);
+    if (bookmark) {
+      await db.bookmarks.update(id, { 
+        tags: (bookmark.tags || []).filter(t => t !== tagToRemove) 
+      });
+    }
   };
+
+  const handleClearAll = async () => {
+    if (confirm('Are you sure you want to clear all data?')) {
+      await db.bookmarks.clear();
+    }
+  };
+
+  const processingIds = useMemo(() => new Set<number>(), []);
+
+  // OGP fetcher
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      const pending = bookmarks.filter(b => b.id && !b.ogp?.loaded && !processingIds.has(b.id)).slice(0, 5);
+      if (pending.length === 0) return;
+
+      // Mark as processing
+      pending.forEach(b => b.id && processingIds.add(b.id));
+
+      for (const b of pending) {
+        if (!b.id) continue;
+        try {
+          const ogpData = await fetchOGP(b.url);
+          await db.bookmarks.update(b.id, { 
+            ogp: { ...(ogpData || {}), loaded: true } 
+          });
+        } catch (e) {
+          console.error(e);
+          await db.bookmarks.update(b.id, { ogp: { loaded: true } });
+        } finally {
+          processingIds.delete(b.id);
+        }
+        // Throttling
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    };
+
+    fetchMetadata();
+  }, [bookmarks.filter(b => !b.ogp?.loaded).length]);
 
   const availableTags = useMemo(() => {
     const tags = new Set<string>();
@@ -150,6 +189,23 @@ function App() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const url = prompt('Enter URL:');
+                if (url) {
+                  db.bookmarks.add({
+                    title: url,
+                    url,
+                    addDate: Math.floor(Date.now() / 1000),
+                    tags: []
+                  });
+                }
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-bold shadow-sm"
+            >
+              <Plus size={18} />
+              Add URL
+            </button>
             {bookmarks.length > 0 && (
               <button
                 onClick={handleExport}
@@ -174,12 +230,35 @@ function App() {
         ) : (
           <div className="space-y-8">
             <div className="flex justify-between items-center">
-               <button 
-                 onClick={() => setBookmarks([])}
-                 className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
-               >
-                 ← Upload different file
-               </button>
+               <div className="flex gap-4">
+                 <button 
+                   onClick={handleClearAll}
+                   className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                 >
+                   <Trash2 size={14} />
+                   Clear All Data
+                 </button>
+                 <button 
+                   onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = '.html';
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => handleFileLoaded(event.target?.result as string);
+                          reader.readAsText(file);
+                        }
+                      };
+                      input.click();
+                   }}
+                   className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                 >
+                   <RefreshCw size={14} />
+                   Import More
+                 </button>
+               </div>
             </div>
             
             <FilterBar 
@@ -198,14 +277,14 @@ function App() {
                 : "grid-cols-1 lg:grid-cols-2 xl:grid-cols-3"
             )}>
               {filteredBookmarks.length > 0 ? (
-                filteredBookmarks.map((bookmark, index) => (
+                filteredBookmarks.map((bookmark) => (
                   <BookmarkCard 
-                    key={`${bookmark.url}-${index}`} 
+                    key={bookmark.id} 
                     bookmark={bookmark} 
                     viewMode={viewMode}
                     onTagClick={(tag) => setFilter(prev => ({ ...prev, selectedTag: tag }))}
-                    onAddTag={(tag) => handleAddTag(bookmark.url, tag)}
-                    onRemoveTag={(tag) => handleRemoveTag(bookmark.url, tag)}
+                    onAddTag={(tag) => handleAddTag(bookmark.id!, tag)}
+                    onRemoveTag={(tag) => handleRemoveTag(bookmark.id!, tag)}
                   />
                 ))
               ) : (

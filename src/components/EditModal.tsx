@@ -21,7 +21,13 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose,
         tags: bookmark.tags || [],
       });
     }
-  }, [bookmark]);
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [bookmark, isOpen, onClose]);
 
   if (!isOpen || !bookmark || bookmark.id === undefined) return null;
 
