@@ -14,14 +14,20 @@ export const useBookmarkSync = () => {
   const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [hasInitialSync, setHasInitialSync] = useState(false);
+  const [lastSyncedUserId, setLastSyncedUserId] = useState<string | null>(null);
 
   // Get local bookmarks from Dexie
   const localBookmarks = useLiveQuery(() => db.bookmarks.toArray(), []) || [];
 
-  // Initial sync when user logs in
+  // Initial sync when user logs in or changes
   useEffect(() => {
-    if (!user || hasInitialSync) return;
+    if (!user) {
+      setLastSyncedUserId(null);
+      return;
+    }
+
+    // Only sync if this is a new user or first time syncing
+    if (lastSyncedUserId === user.uid) return;
 
     const performInitialSync = async () => {
       setSyncStatus('syncing');
@@ -30,7 +36,7 @@ export const useBookmarkSync = () => {
         await mergeBookmarks(user.uid);
         setSyncStatus('synced');
         setError(null);
-        setHasInitialSync(true);
+        setLastSyncedUserId(user.uid);
       } catch (err) {
         console.error('Error during initial sync:', err);
         setSyncStatus('error');
@@ -39,7 +45,7 @@ export const useBookmarkSync = () => {
     };
 
     performInitialSync();
-  }, [user, hasInitialSync]);
+  }, [user, lastSyncedUserId]);
 
   // Subscribe to Firestore changes
   useEffect(() => {
@@ -47,12 +53,15 @@ export const useBookmarkSync = () => {
 
     const unsubscribe = subscribeToBookmarks(user.uid, async (remoteBookmarks) => {
       try {
-        // Update local database with remote changes
-        await db.bookmarks.clear();
-        await db.bookmarks.bulkAdd(remoteBookmarks);
+        // Update local database with remote changes atomically
+        await db.transaction('rw', db.bookmarks, async () => {
+          await db.bookmarks.clear();
+          await db.bookmarks.bulkAdd(remoteBookmarks);
+        });
         setSyncStatus('synced');
       } catch (err) {
         console.error('Error updating local bookmarks:', err);
+        setSyncStatus('error');
       }
     });
 

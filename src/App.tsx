@@ -56,6 +56,12 @@ function App() {
   }, [syncedBookmarks]);
 
   const handleFileLoaded = async (content: string) => {
+    // Prevent file uploads during sync to avoid race conditions
+    if (syncStatus === 'syncing') {
+      console.warn('Sync in progress. Please wait before uploading a file.');
+      return;
+    }
+    
     const parsed = parseBookmarks(content);
     setBookmarks(parsed);
     

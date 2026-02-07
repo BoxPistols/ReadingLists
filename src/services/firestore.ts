@@ -92,13 +92,11 @@ export const syncLocalToFirestore = async (userId: string): Promise<void> => {
 export const syncFirestoreToLocal = async (userId: string): Promise<void> => {
   const firestoreBookmarks = await fetchBookmarksFromFirestore(userId);
   
-  // Clear local database
-  await dexieDb.bookmarks.clear();
-  
-  // Add all Firestore bookmarks to local database
-  for (const bookmark of firestoreBookmarks) {
-    await dexieDb.bookmarks.add(bookmark);
-  }
+  // Clear local database and add all Firestore bookmarks atomically
+  await dexieDb.transaction('rw', dexieDb.bookmarks, async () => {
+    await dexieDb.bookmarks.clear();
+    await dexieDb.bookmarks.bulkAdd(firestoreBookmarks);
+  });
 };
 
 // Listen to real-time updates from Firestore
@@ -163,6 +161,6 @@ export const mergeBookmarks = async (userId: string): Promise<void> => {
   
   // Add remaining remote bookmarks to local
   for (const remoteBookmark of remoteMap.values()) {
-    await dexieDb.bookmarks.add(remoteBookmark);
+    await dexieDb.bookmarks.put(remoteBookmark);
   }
 };
