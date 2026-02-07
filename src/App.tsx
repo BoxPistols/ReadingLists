@@ -1,20 +1,42 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { Bookmark, ViewMode } from './types';
 import { parseBookmarks } from './utils/parser';
-import { fetchOGP } from './utils/ogp';
-import { generateBookmarkHtml, downloadHtml } from './utils/exporter';
 import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
-import { HelpModal } from './components/HelpModal';
-import { HelpCircle, Download } from 'lucide-react';
+import { Download, HelpCircle, Globe } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { clsx } from 'clsx';
 
+// Minimal Help Modal
+const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl">
+        <h2 className="text-2xl font-bold mb-4">How to export bookmarks</h2>
+        <ol className="list-decimal list-inside space-y-3 text-gray-600 mb-6 text-sm">
+          <li>Open Google Chrome</li>
+          <li>Go to Bookmark Manager (Ctrl+Shift+O)</li>
+          <li>Click the three dots icon (Top Right)</li>
+          <li>Select "Export Bookmarks"</li>
+          <li>Upload the exported HTML file here</li>
+        </ol>
+        <button 
+          onClick={onClose}
+          className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [filter, setFilter] = useState<FilterState>({
     search: '',
     sortBy: 'date',
@@ -28,82 +50,36 @@ function App() {
     setBookmarks(parsed);
   };
 
-  // OGP fetcher logic
-  useEffect(() => {
-    const fetchMetadata = async () => {
-      // まだ読み込まれていないものを抽出 (最大5つずつ並行実行)
-      const pending = bookmarks.filter(b => !b.ogp?.loaded);
-      if (pending.length === 0) return;
-
-      const batchSize = 3;
-      for (let i = 0; i < pending.length; i += batchSize) {
-        const batch = pending.slice(i, i + batchSize);
-        
-        await Promise.all(batch.map(async (b) => {
-          const ogpData = await fetchOGP(b.url);
-          setBookmarks(prev => prev.map(item => {
-            if (item.url === b.url) {
-              return { 
-                ...item, 
-                ogp: { ...ogpData, loaded: true } 
-              };
-            }
-            return item;
-          }));
-        }));
-        
-        // 少し待機してプロキシへの負荷を軽減
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    };
-
-    if (bookmarks.length > 0) {
-      fetchMetadata();
-    }
-  }, [bookmarks.filter(b => !b.ogp?.loaded).length > 0]);
-
   const handleExport = () => {
-    const html = generateBookmarkHtml(bookmarks);
-    downloadHtml(html, `reading_list_export_${new Date().toISOString().slice(0, 10)}.html`);
-  };
-
-  const handleAddTag = (bookmarkUrl: string, tag: string) => {
-    setBookmarks(prev => prev.map(b => {
-      if (b.url === bookmarkUrl) {
-        const currentTags = b.tags || [];
-        if (!currentTags.includes(tag)) {
-          return { ...b, tags: [...currentTags, tag] };
-        }
-      }
-      return b;
-    }));
-  };
-
-  const handleRemoveTag = (bookmarkUrl: string, tagToRemove: string) => {
-    setBookmarks(prev => prev.map(b => {
-      if (b.url === bookmarkUrl) {
-        return { ...b, tags: (b.tags || []).filter(t => t !== tagToRemove) };
-      }
-      return b;
-    }));
+    // Basic implementation for demonstration
+    const content = JSON.stringify(bookmarks, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'reading-list-export.json';
+    a.click();
   };
 
   const filteredBookmarks = useMemo(() => {
+    // 検索ワードをスペース（全角・半角）で分割して配列化
+    const searchWords = filter.search.toLowerCase().trim().split(/[\s ]+|\s +/).filter(Boolean);
+
     return bookmarks
       .filter((b) => {
-        // Search Filter
-        const searchLower = filter.search.toLowerCase();
-        const matchesSearch =
-          b.title.toLowerCase().includes(searchLower) ||
-          b.url.toLowerCase().includes(searchLower) ||
-          (b.tags && b.tags.some(t => t.toLowerCase().includes(searchLower))); // Search in tags too
+        // AND Search: すべての単語が含まれているか確認
+        const matchesSearch = searchWords.length === 0 || searchWords.every(word => 
+          b.title.toLowerCase().includes(word) ||
+          b.url.toLowerCase().includes(word) ||
+          (b.tags && b.tags.some(t => t.toLowerCase().includes(word)))
+        );
 
         // Date Filter
         let matchesDate = true;
         if (filter.startDate || filter.endDate) {
           const bookmarkDate = new Date(b.addDate * 1000);
           const start = filter.startDate ? startOfDay(new Date(filter.startDate)) : new Date(0);
-          const end = filter.endDate ? endOfDay(new Date(filter.endDate)) : new Date(8640000000000000); // Max Date
+          const end = filter.endDate ? endOfDay(new Date(filter.endDate)) : new Date(8640000000000000);
           matchesDate = isWithinInterval(bookmarkDate, { start, end });
         }
 
@@ -121,48 +97,51 @@ function App() {
   }, [bookmarks, filter]);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50/50 py-12 px-4 sm:px-6 lg:px-8">
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-1.5 rounded-lg w-10 h-10 flex items-center justify-center overflow-hidden shadow-sm">
+      <div className="max-w-7xl mx-auto">
+        <header className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-600 p-2 rounded-2xl w-12 h-12 flex items-center justify-center shadow-lg shadow-blue-500/20">
               <img src="/icon.svg" alt="Logo" className="w-full h-full scale-110" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Reading List Manager</h1>
+            <div>
+              <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Reading List Manager</h1>
+              <p className="text-sm text-gray-400 font-medium">Manage and organize your curated content</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          
+          <div className="flex items-center gap-3">
             {bookmarks.length > 0 && (
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                title="Export current list to HTML"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-black transition-all text-sm font-bold shadow-sm"
               >
                 <Download size={18} />
-                Export HTML
+                Export Data
               </button>
             )}
             <button
               onClick={() => setIsHelpOpen(true)}
-              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+              className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
               title="Help & Guide"
             >
               <HelpCircle size={24} />
             </button>
           </div>
-        </div>
+        </header>
 
         {bookmarks.length === 0 ? (
           <UploadArea onFileLoaded={handleFileLoaded} />
         ) : (
-          <>
-            <div className="flex justify-end mb-4">
+          <div className="space-y-8">
+            <div className="flex justify-between items-center">
                <button 
                  onClick={() => setBookmarks([])}
-                 className="text-sm text-gray-500 hover:text-red-600 underline"
+                 className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
                >
-                 Upload a different file
+                 ← Upload different file
                </button>
             </div>
             
@@ -174,28 +153,36 @@ function App() {
               totalCount={filteredBookmarks.length} 
             />
 
-            <div className={clsx(
-              "gap-4",
-              viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2" : "space-y-4"
+            <main className={clsx(
+              "transition-all duration-500",
+              viewMode === 'grid' 
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" 
+                : "max-w-4xl mx-auto space-y-4"
             )}>
               {filteredBookmarks.length > 0 ? (
                 filteredBookmarks.map((bookmark, index) => (
                   <BookmarkCard 
                     key={`${bookmark.url}-${index}`} 
-                    bookmark={bookmark}
-                    onAddTag={(tag) => handleAddTag(bookmark.url, tag)}
-                    onRemoveTag={(tag) => handleRemoveTag(bookmark.url, tag)}
+                    bookmark={bookmark} 
+                    viewMode={viewMode}
                   />
                 ))
               ) : (
-                <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-gray-200">
-                  No bookmarks found matching your criteria.
+                <div className={clsx(
+                  "text-center py-32 text-gray-300 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center",
+                  viewMode === 'grid' && "col-span-full"
+                )}>
+                  <Globe className="w-16 h-16 mb-4 opacity-10" />
+                  <p className="text-xl font-medium">No results found</p>
+                  <p className="text-sm">Try adjusting your search or filters</p>
                 </div>
               )}
-            </div>
-          </>
+            </main>
+          </div>
         )}
       </div>
     </div>
   );
-}export default App;
+}
+
+export default App;
