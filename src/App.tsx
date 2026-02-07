@@ -1,12 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Bookmark, ViewMode } from './types';
 import { parseBookmarks } from './utils/parser';
 import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
-import { Download, HelpCircle, Globe } from 'lucide-react';
+import { Download, HelpCircle, Globe, Cloud, CloudOff, LogIn, LogOut } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { clsx } from 'clsx';
+import { useAuth } from './contexts/AuthContext';
+import { useBookmarkSync } from './hooks/useBookmarkSync';
+import { db } from './db';
 
 // Minimal Help Modal
 const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
@@ -34,6 +37,8 @@ const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
 };
 
 function App() {
+  const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth();
+  const { bookmarks: syncedBookmarks, syncStatus, syncNow } = useBookmarkSync();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -45,9 +50,23 @@ function App() {
     endDate: '',
   });
 
-  const handleFileLoaded = (content: string) => {
+  // Update bookmarks when synced bookmarks change
+  useEffect(() => {
+    setBookmarks(syncedBookmarks);
+  }, [syncedBookmarks]);
+
+  const handleFileLoaded = async (content: string) => {
     const parsed = parseBookmarks(content);
     setBookmarks(parsed);
+    
+    // Save to local database
+    await db.bookmarks.clear();
+    await db.bookmarks.bulkAdd(parsed);
+    
+    // If user is logged in, sync to Firestore
+    if (user) {
+      await syncNow();
+    }
   };
 
   const handleExport = () => {
@@ -113,6 +132,56 @@ function App() {
           </div>
           
           <div className="flex items-center gap-3">
+            {/* Sync Status Indicator */}
+            {user && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={syncNow}
+                  className={clsx(
+                    "p-2.5 rounded-xl transition-all",
+                    syncStatus === 'syncing' && "animate-pulse bg-blue-100 text-blue-600",
+                    syncStatus === 'synced' && "bg-green-100 text-green-600 hover:bg-green-200",
+                    syncStatus === 'error' && "bg-red-100 text-red-600 hover:bg-red-200",
+                    syncStatus === 'idle' && "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                  )}
+                  title={
+                    syncStatus === 'syncing' ? 'Syncing...' :
+                    syncStatus === 'synced' ? 'Synced with cloud' :
+                    syncStatus === 'error' ? 'Sync error - click to retry' :
+                    'Click to sync'
+                  }
+                >
+                  {syncStatus === 'error' ? <CloudOff size={18} /> : <Cloud size={18} />}
+                </button>
+                <div className="text-xs text-gray-500 hidden md:block">
+                  {user.displayName || user.email}
+                </div>
+              </div>
+            )}
+            
+            {/* Auth Button */}
+            {!authLoading && (
+              user ? (
+                <button
+                  onClick={signOut}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all text-sm font-bold"
+                  title="Sign Out"
+                >
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </button>
+              ) : (
+                <button
+                  onClick={signInWithGoogle}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-bold shadow-sm"
+                  title="Sign in with Google"
+                >
+                  <LogIn size={18} />
+                  <span className="hidden sm:inline">Sign In</span>
+                </button>
+              )
+            )}
+            
             {bookmarks.length > 0 && (
               <button
                 onClick={handleExport}
