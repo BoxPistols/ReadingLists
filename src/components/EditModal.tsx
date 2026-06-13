@@ -6,28 +6,26 @@ interface EditModalProps {
   isOpen: boolean;
   bookmark: Bookmark | null;
   onClose: () => void;
-  onSave: (id: number, updates: Partial<Bookmark>) => void;
-  onDelete: (id: number) => void;
+  onSave: (id: string, updates: Partial<Bookmark>) => void;
+  onDelete: (id: string) => void;
 }
 
 export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose, onSave, onDelete }) => {
-  const [formData, setFormData] = useState<Partial<Bookmark>>({});
+  // 親が bookmark 単位で key を付けて再マウントするため、初期値を props から直接導出する
+  // （effect 内 setState を避ける）。
+  const [formData, setFormData] = useState<Partial<Bookmark>>(() => ({
+    title: bookmark?.title,
+    url: bookmark?.url,
+    tags: bookmark?.tags || [],
+  }));
 
   useEffect(() => {
-    if (bookmark) {
-      setFormData({
-        title: bookmark.title,
-        url: bookmark.url,
-        tags: bookmark.tags || [],
-      });
-    }
-
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     if (isOpen) window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [bookmark, isOpen, onClose]);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !bookmark || bookmark.id === undefined) return null;
 

@@ -1,29 +1,76 @@
 # Reading List Manager
 
-Chromeやその他のブラウザからエクスポートされたリーディングリスト（ブックマークHTMLファイル）を管理・閲覧するためのWebアプリケーションです。
+Chromeやその他のブラウザからエクスポートされたリーディングリスト（ブックマークHTMLファイル）を管理・閲覧するためのWebアプリケーションです。**Firebase によるマルチデバイス同期**に対応しています。
 
 ## 機能
 
 *   **インポート**: HTMLファイルをドラッグ＆ドロップで読み込み。
-*   **検索**: タイトルやURLでリアルタイム検索。
+*   **検索**: タイトルやURLでリアルタイム検索（AND検索）。
 *   **フィルタリング**: 追加日（Date Added）による期間指定フィルタ。
 *   **ソート**: 追加日順、タイトル順での並び替え。
+*   **編集 / 削除**: カードの編集ボタンからタイトル・URL・タグを編集、単体削除。
+*   **クラウド同期**: Firebase Auth + Firestore で全端末リアルタイム同期。オフライン編集も自動同期。
+*   **OGP 自動取得**: 追加時に Cloud Function がサムネイル・説明文をサーバー側で取得して保存。
 
-## 使い方
+## アーキテクチャ
 
-1.  アプリケーションを起動します。
-    ```bash
-    npm install
-    npm run dev
-    ```
-2.  ブラウザで表示された画面（通常 `http://localhost:5173`）を開きます。
-3.  中央のエリアに、ブラウザからエクスポートしたリーディングリストのHTMLファイルをドラッグ＆ドロップします。
-4.  リストが表示されたら、上部のバーを使って検索や並び替えを行います。
+```
+[Client React]
+  Firestore SDK (persistentLocalCache)  ← onSnapshot リアルタイム + オフライン書込
+        │  add bookmark {url, title}
+        ▼
+[Firestore]  users/{uid}/bookmarks/{id}
+        │  onDocumentCreated
+        ▼
+[Cloud Function enrichBookmark]  OGP/favicon を1回取得 → doc に書き戻し
+        ▼  (全端末に push)
+```
+
+- **認証**: Anonymous-first（開いた瞬間に匿名サインイン）→ 任意で Google アカウントへ昇格（匿名データを引き継ぎ）。ログインウォールなし。
+- **データ層**: `src/repo/bookmarksRepo.ts` が Firestore CRUD を抽象化。UI は同期実装を意識しない。
+- **同期状態**: ヘッダーのクラウドアイコンが `synced / syncing / offline` を表示。
+
+## セットアップ
+
+### 1. Firebase プロジェクト作成
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクトを作成。
+2. **Authentication** を有効化し、ログインプロバイダで **匿名** と **Google** をオンにする。
+3. **Cloud Firestore** を作成（本番モード）。
+4. **プロジェクト設定 > マイアプリ** で Web アプリを登録し、表示される config をコピー。
+
+### 2. 環境変数
+```bash
+cp .env.example .env
+# .env に Firebase config の値を記入
+```
+
+### 3. ローカル起動
+```bash
+npm install
+npm run dev          # http://localhost:5173
+```
+
+### 4. デプロイ
+```bash
+npm i -g firebase-tools         # 未インストールの場合
+firebase login
+firebase use --add              # 作成したプロジェクトを選択（.firebaserc を更新）
+
+# セキュリティルール + Functions + Hosting を一括デプロイ
+npm run deploy                  # = npm run build && firebase deploy
+```
+
+> **Cloud Functions について**: OGP 自動取得（`functions/`）は Functions v2 を使うため **Blaze（従量）プラン**が必要です。個人利用の規模なら無料枠内で実質 \$0。未デプロイでもアプリは動作します（OGP が埋まらず、サムネイルはフォールバック表示になるだけ）。
+
+### エミュレータ（ローカル検証）
+```bash
+npm run emulators    # Auth / Firestore / Functions / Hosting をローカル起動
+```
 
 ## 技術スタック
 
-*   React + TypeScript
-*   Vite
-*   Tailwind CSS
-*   Lucide React (Icons)
-*   date-fns (Date manipulation)
+*   React 19 + TypeScript
+*   Vite 7
+*   Tailwind CSS v4
+*   Firebase (Auth, Firestore offline cache, Cloud Functions v2)
+*   Lucide React (Icons) / date-fns

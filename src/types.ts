@@ -1,5 +1,6 @@
 export interface Bookmark {
-  id?: number;
+  // Firestore のドキュメントID（文字列）。新規作成前は undefined。
+  id?: string;
   title: string;
   url: string;
   addDate: number;
@@ -16,3 +17,6 @@ export interface Bookmark {
 }
 
 export type ViewMode = 'list' | 'grid';
+
+// 同期状態（クラウドアイコン表示用）
+export type SyncStatus = 'synced' | 'pending' | 'offline';
