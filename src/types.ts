@@ -6,6 +6,8 @@ export interface Bookmark {
   addDate: number;
   lastModified?: number;
   icon?: string;
+  // AI 自動分類による単一カテゴリ（src/constants/taxonomy.ts の CATEGORIES）。
+  category?: string;
   tags?: string[];
   image?: string;
   ogp?: {

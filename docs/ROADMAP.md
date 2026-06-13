@@ -1,6 +1,13 @@
-# Firebase Integration — Done
+# URL Bookmarker + AI 分類 + Firebase 同期 — Done
 
-ローカル IndexedDB(Dexie) からの脱却とマルチデバイス同期を Firebase で実装済み。
+URL を貼って登録する Bookmarker に、Claude による AI 自動分類とマルチデバイス同期を実装済み。
+
+## URL ブックマーカー + AI 分類
+- [x] URL を貼って登録する主役入力（`src/components/UrlAddBar.tsx`）。HTML 一括インポートは副次機能として残置
+- [x] 単一カテゴリ + 複数タグの分類モデル（`src/constants/taxonomy.ts` の `CATEGORIES`）
+- [x] Cloud Function で Claude (`claude-opus-4-8`) が追加時に単一カテゴリ + タグを自動付与（structured outputs / `functions/src/index.ts`）。既存タグとマージ、プレースホルダタイトルは OGP で補完
+- [x] カテゴリでの絞り込み（FilterBar）、カードのカテゴリバッジ + 「分類中…」表示、EditModal でのカテゴリ手動修正
+- [x] API キーは `functions:secrets:set ANTHROPIC_API_KEY` で注入。未設定でも OGP のみ best-effort で動作
 
 ## 実装済み
 

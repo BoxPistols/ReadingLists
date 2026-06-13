@@ -14,9 +14,10 @@ import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
 import { EditModal } from './components/EditModal';
+import { UrlAddBar } from './components/UrlAddBar';
 import { AuthButton } from './components/AuthButton';
 import { SyncIndicator } from './components/SyncIndicator';
-import { Download, HelpCircle, Globe, Trash2, RefreshCw, Plus, Loader2 } from 'lucide-react';
+import { Download, HelpCircle, Globe, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval, format, subDays } from 'date-fns';
 import { clsx } from 'clsx';
 
@@ -69,6 +70,7 @@ function App() {
     startDate: defaultStartDate,
     endDate: '',
     selectedTag: '',
+    selectedCategory: '',
   });
 
   const handleFileLoaded = async (content: string) => {
@@ -130,17 +132,22 @@ function App() {
     await removeBookmark(user.uid, id);
   };
 
-  const handleAddUrl = async () => {
+  const handleAddUrl = async (url: string) => {
     if (!user) return;
-    const url = prompt('Enter URL:');
-    if (url) {
-      await addBookmark(user.uid, {
-        title: url,
-        url,
-        addDate: Math.floor(Date.now() / 1000),
-        tags: [],
-      });
+    // タイトルは暫定で URL。OGP 取得後に Cloud Function 側で上書きされる想定だが、
+    // 表示用に hostname を初期タイトルにしておく。
+    let initialTitle = url;
+    try {
+      initialTitle = new URL(url).hostname;
+    } catch {
+      /* noop */
     }
+    await addBookmark(user.uid, {
+      title: initialTitle,
+      url,
+      addDate: Math.floor(Date.now() / 1000),
+      tags: [],
+    });
   };
 
   const availableTags = useMemo(() => {
@@ -149,6 +156,14 @@ function App() {
       b.tags?.forEach((t) => tags.add(t));
     });
     return Array.from(tags).sort();
+  }, [bookmarks]);
+
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    bookmarks.forEach((b) => {
+      if (b.category) cats.add(b.category);
+    });
+    return Array.from(cats).sort();
   }, [bookmarks]);
 
   const filteredBookmarks = useMemo(() => {
@@ -170,7 +185,9 @@ function App() {
 
         const matchesTag = !filter.selectedTag || (b.tags && b.tags.includes(filter.selectedTag));
 
-        return matchesSearch && matchesDate && matchesTag;
+        const matchesCategory = !filter.selectedCategory || b.category === filter.selectedCategory;
+
+        return matchesSearch && matchesDate && matchesTag && matchesCategory;
       })
       .sort((a, b) => {
         let comparison = 0;
@@ -221,13 +238,6 @@ function App() {
 
           <div className="flex items-center gap-3">
             <SyncIndicator status={status} />
-            <button
-              onClick={handleAddUrl}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-bold shadow-sm"
-            >
-              <Plus size={18} />
-              Add URL
-            </button>
             {bookmarks.length > 0 && (
               <button
                 onClick={handleExport}
@@ -249,9 +259,25 @@ function App() {
         </header>
 
         {bookmarks.length === 0 ? (
-          <UploadArea onFileLoaded={handleFileLoaded} />
+          <div className="space-y-6 max-w-3xl mx-auto">
+            <div className="text-center mb-2">
+              <h2 className="text-xl font-bold text-gray-800">URL を追加して始めましょう</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                貼り付けるだけで OGP 取得と AI 分類を自動で行います
+              </p>
+            </div>
+            <UrlAddBar onAdd={handleAddUrl} />
+            <div className="flex items-center gap-3 text-xs text-gray-300 uppercase tracking-widest">
+              <div className="h-px bg-gray-100 flex-1" />
+              または HTML から一括インポート
+              <div className="h-px bg-gray-100 flex-1" />
+            </div>
+            <UploadArea onFileLoaded={handleFileLoaded} />
+          </div>
         ) : (
           <div className="space-y-8">
+            <UrlAddBar onAdd={handleAddUrl} />
+
             <div className="flex justify-between items-center">
               <div className="flex gap-4">
                 <button
@@ -291,6 +317,7 @@ function App() {
               onViewModeChange={setViewMode}
               totalCount={filteredBookmarks.length}
               availableTags={availableTags}
+              availableCategories={availableCategories}
             />
 
             <main
