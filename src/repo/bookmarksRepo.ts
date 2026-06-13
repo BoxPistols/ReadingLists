@@ -55,7 +55,11 @@ export const subscribeBookmarks = (
 };
 
 export const addBookmark = async (uid: string, data: Omit<Bookmark, 'id'>) => {
-  const ref = await addDoc(bookmarksCol(uid), stripUndefined(data));
+  const now = Math.floor(Date.now() / 1000);
+  const ref = await addDoc(bookmarksCol(uid), stripUndefined({
+    ...data,
+    lastModified: now,
+  }));
   return ref.id;
 };
 
@@ -64,11 +68,15 @@ export const bulkAddBookmarks = async (
   uid: string,
   items: Array<Omit<Bookmark, 'id'>>,
 ) => {
+  const now = Math.floor(Date.now() / 1000);
   for (let i = 0; i < items.length; i += FIRESTORE_BATCH_LIMIT) {
     const batch = writeBatch(db as Firestore);
     const chunk = items.slice(i, i + FIRESTORE_BATCH_LIMIT);
     for (const item of chunk) {
-      batch.set(doc(bookmarksCol(uid)), stripUndefined(item));
+      batch.set(doc(bookmarksCol(uid)), stripUndefined({
+        ...item,
+        lastModified: now,
+      }));
     }
     await batch.commit();
   }
@@ -79,7 +87,22 @@ export const updateBookmark = async (
   id: string,
   updates: Partial<Bookmark>,
 ) => {
-  await updateDoc(doc(bookmarksCol(uid), id), stripUndefined(updates));
+  await updateDoc(doc(bookmarksCol(uid), id), stripUndefined({
+    ...updates,
+    lastModified: Math.floor(Date.now() / 1000),
+  }));
+};
+
+// 並び替え用の一括更新
+export const updateBookmarkPositions = async (
+  uid: string,
+  positions: Array<{ id: string; order: number }>,
+) => {
+  const batch = writeBatch(db as Firestore);
+  for (const { id, order } of positions) {
+    batch.update(doc(bookmarksCol(uid), id), { order });
+  }
+  await batch.commit();
 };
 
 export const removeBookmark = async (uid: string, id: string) => {

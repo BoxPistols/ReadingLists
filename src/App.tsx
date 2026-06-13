@@ -8,18 +8,43 @@ import {
   updateBookmark,
   removeBookmark,
   clearAllBookmarks,
+  updateBookmarkPositions,
 } from './repo/bookmarksRepo';
+import {
+  getCustomCategories,
+  saveCustomCategories,
+  renameCategoryAcrossBookmarks,
+  removeCategoryAcrossBookmarks,
+} from './repo/settingsRepo';
+import { CATEGORIES as DEFAULT_CATEGORIES } from './constants/taxonomy';
 import { parseBookmarks } from './utils/parser';
 import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
 import { EditModal } from './components/EditModal';
+import { CategoryModal } from './components/CategoryModal';
 import { UrlAddBar } from './components/UrlAddBar';
 import { AuthButton } from './components/AuthButton';
 import { SyncIndicator } from './components/SyncIndicator';
-import { Download, HelpCircle, Globe, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { Download, HelpCircle, Globe, Trash2, RefreshCw, Loader2, Settings2 } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval, format, subDays } from 'date-fns';
 import { clsx } from 'clsx';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
 
 const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   useEffect(() => {
@@ -58,7 +83,9 @@ function App() {
   const { bookmarks, status, loaded } = useBookmarks();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
 
   // Default to 365 days ago
   const defaultStartDate = useMemo(() => format(subDays(new Date(), 365), 'yyyy-MM-dd'), []);
@@ -69,14 +96,76 @@ function App() {
     sortOrder: 'desc',
     startDate: defaultStartDate,
     endDate: '',
-    selectedTag: '',
-    selectedCategory: '',
+    selectedTags: [],
+    selectedCategories: [],
   });
+
+  useEffect(() => {
+    if (user) {
+      getCustomCategories(user.uid).then((cats) => {
+        if (cats) {
+          setCustomCategories(cats);
+        } else {
+          setCustomCategories([...DEFAULT_CATEGORIES]);
+        }
+      });
+    }
+  }, [user]);
+
+  const handleAddCategory = async (name: string) => {
+    if (!user) return;
+    const updated = [...customCategories, name];
+    setCustomCategories(updated);
+    await saveCustomCategories(user.uid, updated);
+  };
+
+  const handleRenameCategory = async (oldName: string, newName: string) => {
+    if (!user) return;
+    const updated = customCategories.map(c => c === oldName ? newName : c);
+    setCustomCategories(updated);
+    await saveCustomCategories(user.uid, updated);
+    await renameCategoryAcrossBookmarks(user.uid, oldName, newName);
+  };
+
+  const handleDeleteCategory = async (name: string) => {
+    if (!user) return;
+    const updated = customCategories.filter(c => c !== name);
+    setCustomCategories(updated);
+    await saveCustomCategories(user.uid, updated);
+    await removeCategoryAcrossBookmarks(user.uid, name);
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+const handleDragEnd = async (event: DragEndEvent) => {
+  const { active, over } = event;
+  if (user && over && active.id !== over.id) {
+    const oldIndex = sortedBookmarks.findIndex((b) => b.id === active.id);
+    const newIndex = sortedBookmarks.findIndex((b) => b.id === over.id);
+
+    const newOrder = arrayMove(sortedBookmarks, oldIndex, newIndex);
+
+    // ソート順が降順 (desc) の場合、見た目の index 0 が order の最大値になるように調整
+    const positions = newOrder.map((b, index) => ({
+      id: b.id!,
+      order: filter.sortOrder === 'desc' ? newOrder.length - 1 - index : index,
+    }));
+
+    await updateBookmarkPositions(user.uid, positions);
+  }
+};
 
   const handleFileLoaded = async (content: string) => {
     if (!user) return;
     const parsed = parseBookmarks(content);
-    // 再インポート時の重複を URL で除外する。
     const existingUrls = new Set(bookmarks.map((b) => b.url));
     const fresh = parsed.filter((b) => !existingUrls.has(b.url));
     if (fresh.length > 0) {
@@ -124,7 +213,15 @@ function App() {
 
   const handleSaveEdit = async (id: string, updates: Partial<Bookmark>) => {
     if (!user) return;
-    await updateBookmark(user.uid, id, updates);
+    const bookmark = bookmarks.find(b => b.id === id);
+    // 既存の ogp 情報を保持しつつ loaded を true にする
+    await updateBookmark(user.uid, id, {
+      ...updates,
+      ogp: {
+        ...(bookmark?.ogp || {}),
+        loaded: true
+      }
+    });
   };
 
   const handleDeleteOne = async (id: string) => {
@@ -134,8 +231,6 @@ function App() {
 
   const handleAddUrl = async (url: string) => {
     if (!user) return;
-    // タイトルは暫定で URL。OGP 取得後に Cloud Function 側で上書きされる想定だが、
-    // 表示用に hostname を初期タイトルにしておく。
     let initialTitle = url;
     try {
       initialTitle = new URL(url).hostname;
@@ -147,6 +242,7 @@ function App() {
       url,
       addDate: Math.floor(Date.now() / 1000),
       tags: [],
+      order: bookmarks.length,
     });
   };
 
@@ -158,47 +254,45 @@ function App() {
     return Array.from(tags).sort();
   }, [bookmarks]);
 
-  const availableCategories = useMemo(() => {
-    const cats = new Set<string>();
-    bookmarks.forEach((b) => {
-      if (b.category) cats.add(b.category);
-    });
-    return Array.from(cats).sort();
-  }, [bookmarks]);
-
   const filteredBookmarks = useMemo(() => {
-    return bookmarks
-      .filter((b) => {
-        const searchTerms = filter.search.toLowerCase().split(/\s+/).filter(Boolean);
-        const matchesSearch = searchTerms.every(
-          (term) =>
-            b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term),
-        );
+    return bookmarks.filter((b) => {
+      const searchTerms = filter.search.toLowerCase().split(/\s+/).filter(Boolean);
+      const matchesSearch = searchTerms.every(
+        (term) =>
+          b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term),
+      );
 
-        let matchesDate = true;
-        if (filter.startDate || filter.endDate) {
-          const bookmarkDate = new Date(b.addDate * 1000);
-          const start = filter.startDate ? startOfDay(new Date(filter.startDate)) : new Date(0);
-          const end = filter.endDate ? endOfDay(new Date(filter.endDate)) : new Date(8640000000000000);
-          matchesDate = isWithinInterval(bookmarkDate, { start, end });
-        }
+      let matchesDate = true;
+      if (filter.startDate || filter.endDate) {
+        const bookmarkDate = new Date(b.addDate * 1000);
+        const start = filter.startDate ? startOfDay(new Date(filter.startDate)) : new Date(0);
+        const end = filter.endDate ? endOfDay(new Date(filter.endDate)) : new Date(8640000000000000);
+        matchesDate = isWithinInterval(bookmarkDate, { start, end });
+      }
 
-        const matchesTag = !filter.selectedTag || (b.tags && b.tags.includes(filter.selectedTag));
+      const matchesTag = filter.selectedTags.length === 0 || 
+        (b.tags && filter.selectedTags.every(t => b.tags!.includes(t)));
 
-        const matchesCategory = !filter.selectedCategory || b.category === filter.selectedCategory;
+      const matchesCategory = filter.selectedCategories.length === 0 || 
+        (b.category && filter.selectedCategories.includes(b.category));
 
-        return matchesSearch && matchesDate && matchesTag && matchesCategory;
-      })
-      .sort((a, b) => {
-        let comparison = 0;
-        if (filter.sortBy === 'date') {
-          comparison = a.addDate - b.addDate;
-        } else {
-          comparison = a.title.localeCompare(b.title);
-        }
-        return filter.sortOrder === 'asc' ? comparison : -comparison;
-      });
+      return matchesSearch && matchesDate && matchesTag && matchesCategory;
+    });
   }, [bookmarks, filter]);
+
+  const sortedBookmarks = useMemo(() => {
+    return [...filteredBookmarks].sort((a, b) => {
+      let comparison = 0;
+      if (filter.sortBy === 'manual') {
+        comparison = (a.order ?? 0) - (b.order ?? 0);
+      } else if (filter.sortBy === 'date') {
+        comparison = a.addDate - b.addDate;
+      } else if (filter.sortBy === 'lastModified') {
+        comparison = (a.lastModified ?? a.addDate) - (b.lastModified ?? b.addDate);
+      }
+      return filter.sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredBookmarks, filter.sortBy, filter.sortOrder]);
 
   // 認証 + 初回購読が完了するまでローディング表示。
   if (authLoading || !loaded) {
@@ -219,9 +313,18 @@ function App() {
         key={editingBookmark?.id}
         isOpen={editingBookmark !== null}
         bookmark={editingBookmark}
+        categories={customCategories}
         onClose={() => setEditingBookmark(null)}
         onSave={handleSaveEdit}
         onDelete={handleDeleteOne}
+      />
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        categories={customCategories}
+        onAdd={handleAddCategory}
+        onRename={handleRenameCategory}
+        onDelete={handleDeleteCategory}
       />
 
       <div className="max-w-[1600px] mx-auto">
@@ -308,6 +411,14 @@ function App() {
                   Import More
                 </button>
               </div>
+
+              <button
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="text-xs font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+              >
+                <Settings2 size={14} />
+                カテゴリを編集
+              </button>
             </div>
 
             <FilterBar
@@ -315,44 +426,56 @@ function App() {
               onChange={setFilter}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              totalCount={filteredBookmarks.length}
+              totalCount={sortedBookmarks.length}
               availableTags={availableTags}
-              availableCategories={availableCategories}
+              availableCategories={customCategories}
             />
 
-            <main
-              className={clsx(
-                'grid gap-6 transition-all duration-500',
-                viewMode === 'grid'
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                  : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3',
-              )}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
             >
-              {filteredBookmarks.length > 0 ? (
-                filteredBookmarks.map((bookmark) => (
-                  <BookmarkCard
-                    key={bookmark.id}
-                    bookmark={bookmark}
-                    viewMode={viewMode}
-                    onTagClick={(tag) => setFilter((prev) => ({ ...prev, selectedTag: tag }))}
-                    onAddTag={(tag) => handleAddTag(bookmark.id!, tag)}
-                    onRemoveTag={(tag) => handleRemoveTag(bookmark.id!, tag)}
-                    onEdit={() => setEditingBookmark(bookmark)}
-                  />
-                ))
-              ) : (
-                <div
+              <SortableContext
+                items={sortedBookmarks.map(b => b.id!)}
+                strategy={viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
+              >
+                <main
                   className={clsx(
-                    'text-center py-32 text-gray-300 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center',
-                    'col-span-full',
+                    'grid transition-all duration-500',
+                    viewMode === 'grid' && 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6',
+                    viewMode === 'list' && 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6',
+                    viewMode === 'table' && 'grid-cols-1 gap-2',
                   )}
                 >
-                  <Globe className="w-16 h-16 mb-4 opacity-10" />
-                  <p className="text-xl font-medium">No results found</p>
-                  <p className="text-sm">Try adjusting your search or filters (Current: last 365 days)</p>
-                </div>
-              )}
-            </main>
+                  {sortedBookmarks.length > 0 ? (
+                    sortedBookmarks.map((bookmark) => (
+                      <BookmarkCard
+                        key={bookmark.id}
+                        bookmark={bookmark}
+                        viewMode={viewMode}
+                        onTagClick={(tag) => setFilter((prev) => ({ ...prev, selectedTags: [tag] }))}
+                        onAddTag={(tag) => handleAddTag(bookmark.id!, tag)}
+                        onRemoveTag={(tag) => handleRemoveTag(bookmark.id!, tag)}
+                        onEdit={() => setEditingBookmark(bookmark)}
+                        isSortable={filter.sortBy === 'manual'}
+                      />
+                    ))
+                  ) : (
+                    <div
+                      className={clsx(
+                        'text-center py-32 text-gray-300 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center',
+                        'col-span-full',
+                      )}
+                    >
+                      <Globe className="w-16 h-16 mb-4 opacity-10" />
+                      <p className="text-xl font-medium">No results found</p>
+                      <p className="text-sm">Try adjusting your search or filters</p>
+                    </div>
+                  )}
+                </main>
+              </SortableContext>
+            </DndContext>
           </div>
         )}
       </div>

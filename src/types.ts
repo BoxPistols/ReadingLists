@@ -10,6 +10,7 @@ export interface Bookmark {
   category?: string;
   tags?: string[];
   image?: string;
+  order?: number; // 並び替え用の順序
   ogp?: {
     title?: string;
     description?: string;
@@ -18,7 +19,9 @@ export interface Bookmark {
   };
 }
 
-export type ViewMode = 'list' | 'grid';
+export type ViewMode = 'list' | 'grid' | 'table';
+
+export type SortBy = 'date' | 'lastModified' | 'manual';
 
 // 同期状態（クラウドアイコン表示用）
 export type SyncStatus = 'synced' | 'pending' | 'offline';
