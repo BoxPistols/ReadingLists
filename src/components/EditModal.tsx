@@ -18,8 +18,10 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose,
     title: bookmark?.title,
     url: bookmark?.url,
     category: bookmark?.category,
-    tags: bookmark?.tags || [],
   }));
+  // タグは生の文字列として保持し、保存時にだけ配列化する。
+  // （配列に即時変換するとカンマ・末尾スペースが入力中に消える）
+  const [tagsInput, setTagsInput] = useState(() => (bookmark?.tags || []).join(', '));
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -33,7 +35,11 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(bookmark.id!, formData);
+    const tags = tagsInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    onSave(bookmark.id!, { ...formData, tags });
     onClose();
   };
 
@@ -95,8 +101,8 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose,
              <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
              <input
                type="text"
-               value={formData.tags?.join(', ') || ''}
-               onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))}
+               value={tagsInput}
+               onChange={(e) => setTagsInput(e.target.value)}
                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                placeholder="React, Design, Tech"
              />
