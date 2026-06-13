@@ -81,20 +81,32 @@ const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
 function App() {
   const { user, loading: authLoading } = useAuth();
   const { bookmarks, status, loaded } = useBookmarks();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem('last_view_mode') as ViewMode) || 'list';
+  });
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
 
-  const [filter, setFilter] = useState<FilterState>({
-    search: '',
-    sortBy: 'date',
-    sortOrder: 'desc',
-    startDate: '', // デフォルトは無制限
-    endDate: '',
-    selectedTags: [],
-    selectedCategories: [],
+  const [filter, setFilter] = useState<FilterState>(() => {
+    const saved = localStorage.getItem('last_filter');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        /* noop */
+      }
+    }
+    return {
+      search: '',
+      sortBy: 'date',
+      sortOrder: 'desc',
+      startDate: '',
+      endDate: '',
+      selectedTags: [],
+      selectedCategories: [],
+    };
   });
 
   // 設定のロード
@@ -103,7 +115,10 @@ function App() {
       getGeneralSettings(user.uid).then((settings) => {
         if (settings) {
           if (settings.categories) setCustomCategories(settings.categories);
-          if (settings.filter) setFilter(prev => ({ ...prev, ...settings.filter }));
+          if (settings.filter) {
+            setFilter(prev => ({ ...prev, ...settings.filter }));
+            localStorage.setItem('last_filter', JSON.stringify(settings.filter));
+          }
           if (settings.viewMode) setViewMode(settings.viewMode);
         }
       });
@@ -113,6 +128,9 @@ function App() {
   // 設定の保存（フィルタと表示モード）
   useEffect(() => {
     if (user && loaded) {
+      localStorage.setItem('last_filter', JSON.stringify(filter));
+      localStorage.setItem('last_view_mode', viewMode);
+      
       const timer = setTimeout(() => {
         saveGeneralSettings(user.uid, { filter, viewMode });
       }, 1000);

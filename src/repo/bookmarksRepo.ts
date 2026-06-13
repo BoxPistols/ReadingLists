@@ -9,7 +9,8 @@ import {
   getDocs,
   type Firestore,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 import type { Bookmark, SyncStatus } from '../types';
 
 // データ層インターフェース: UI 側は Dexie か Firestore かを意識しない。
@@ -27,6 +28,17 @@ const stripUndefined = <T extends Record<string, unknown>>(obj: T): Partial<T> =
     if (v !== undefined) out[k] = v;
   }
   return out as Partial<T>;
+};
+
+export const uploadBookmarkImage = async (
+  uid: string,
+  bookmarkId: string,
+  file: File,
+): Promise<string> => {
+  const path = `users/${uid}/bookmarks/${bookmarkId}/${Date.now()}_${file.name}`;
+  const storageRef = sRef(storage, path);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
 };
 
 // リアルタイム購読。metadata から同期状態を導出してクラウドアイコンに反映する。

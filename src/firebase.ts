@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -18,6 +19,7 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 // Dexie の置換: Firestore のネイティブ IndexedDB キャッシュでオフライン永続化 + 自動同期。
 // persistentMultipleTabManager で複数タブ間のキャッシュも共有する。

@@ -47,7 +47,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const date = new Date(bookmark.addDate * 1000);
   const hostname = new URL(bookmark.url).hostname;
   const faviconUrl = bookmark.icon || `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
-  const thumbnailUrl = bookmark.ogp?.image || bookmark.image || `https://api.microlink.io/?url=${encodeURIComponent(bookmark.url)}&screenshot=true&embed=screenshot.url`;
+  const thumbnailUrl = bookmark.image || bookmark.ogp?.image || `https://api.microlink.io/?url=${encodeURIComponent(bookmark.url)}&screenshot=true&embed=screenshot.url`;
 
   const handleAddTagSubmit = (e: React.FormEvent) => {
     e.preventDefault();
