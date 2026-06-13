@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Bookmark } from '../types';
 import { X, Save, Trash2, Upload, Link as LinkIcon, Image as ImageIcon, Loader2, Check } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { uploadBookmarkImage } from '../repo/bookmarksRepo';
 import Cropper from 'react-easy-crop';
 import { getCroppedImgBase64 } from '../utils/canvasUtils';
 
