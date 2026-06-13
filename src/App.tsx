@@ -11,8 +11,8 @@ import {
   updateBookmarkPositions,
 } from './repo/bookmarksRepo';
 import {
-  getCustomCategories,
-  saveCustomCategories,
+  getGeneralSettings,
+  saveGeneralSettings,
   renameCategoryAcrossBookmarks,
   removeCategoryAcrossBookmarks,
 } from './repo/settingsRepo';
@@ -27,7 +27,7 @@ import { UrlAddBar } from './components/UrlAddBar';
 import { AuthButton } from './components/AuthButton';
 import { SyncIndicator } from './components/SyncIndicator';
 import { Download, HelpCircle, Globe, Trash2, RefreshCw, Loader2, Settings2 } from 'lucide-react';
-import { startOfDay, endOfDay, isWithinInterval, format, subDays } from 'date-fns';
+import { startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { clsx } from 'clsx';
 import {
   DndContext,
@@ -87,43 +87,51 @@ function App() {
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
 
-  // Default to 365 days ago
-  const defaultStartDate = useMemo(() => format(subDays(new Date(), 365), 'yyyy-MM-dd'), []);
-
   const [filter, setFilter] = useState<FilterState>({
     search: '',
     sortBy: 'date',
     sortOrder: 'desc',
-    startDate: defaultStartDate,
+    startDate: '', // デフォルトは無制限
     endDate: '',
     selectedTags: [],
     selectedCategories: [],
   });
 
+  // 設定のロード
   useEffect(() => {
     if (user) {
-      getCustomCategories(user.uid).then((cats) => {
-        if (cats) {
-          setCustomCategories(cats);
-        } else {
-          setCustomCategories([...DEFAULT_CATEGORIES]);
+      getGeneralSettings(user.uid).then((settings) => {
+        if (settings) {
+          if (settings.categories) setCustomCategories(settings.categories);
+          if (settings.filter) setFilter(prev => ({ ...prev, ...settings.filter }));
+          if (settings.viewMode) setViewMode(settings.viewMode);
         }
       });
     }
   }, [user]);
 
+  // 設定の保存（フィルタと表示モード）
+  useEffect(() => {
+    if (user && loaded) {
+      const timer = setTimeout(() => {
+        saveGeneralSettings(user.uid, { filter, viewMode });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, filter, viewMode, loaded]);
+
   const handleAddCategory = async (name: string) => {
     if (!user) return;
     const updated = [...customCategories, name];
     setCustomCategories(updated);
-    await saveCustomCategories(user.uid, updated);
+    await saveGeneralSettings(user.uid, { categories: updated });
   };
 
   const handleRenameCategory = async (oldName: string, newName: string) => {
     if (!user) return;
     const updated = customCategories.map(c => c === oldName ? newName : c);
     setCustomCategories(updated);
-    await saveCustomCategories(user.uid, updated);
+    await saveGeneralSettings(user.uid, { categories: updated });
     await renameCategoryAcrossBookmarks(user.uid, oldName, newName);
   };
 
@@ -131,7 +139,7 @@ function App() {
     if (!user) return;
     const updated = customCategories.filter(c => c !== name);
     setCustomCategories(updated);
-    await saveCustomCategories(user.uid, updated);
+    await saveGeneralSettings(user.uid, { categories: updated });
     await removeCategoryAcrossBookmarks(user.uid, name);
   };
 

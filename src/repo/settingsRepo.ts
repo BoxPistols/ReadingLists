@@ -13,16 +13,25 @@ import { db } from '../firebase';
 
 const settingsDoc = (uid: string) => doc(db as Firestore, 'users', uid, 'settings', 'general');
 
-export const getCustomCategories = async (uid: string): Promise<string[] | null> => {
+export const getGeneralSettings = async (uid: string): Promise<any | null> => {
   const snap = await getDoc(settingsDoc(uid));
   if (snap.exists()) {
-    return snap.data().categories as string[];
+    return snap.data();
   }
   return null;
 };
 
+export const saveGeneralSettings = async (uid: string, settings: any) => {
+  await setDoc(settingsDoc(uid), settings, { merge: true });
+};
+
+export const getCustomCategories = async (uid: string): Promise<string[] | null> => {
+  const settings = await getGeneralSettings(uid);
+  return settings?.categories || null;
+};
+
 export const saveCustomCategories = async (uid: string, categories: string[]) => {
-  await setDoc(settingsDoc(uid), { categories }, { merge: true });
+  await saveGeneralSettings(uid, { categories });
 };
 
 // カテゴリ名の変更（全ブックマークを一括更新）

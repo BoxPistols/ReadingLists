@@ -258,9 +258,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     );
   }
 
-  // Default List View - Updated to show image
+  // Default List View - Updated to show image and maximize title space
   return (
-    <div ref={setNodeRef} style={style} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-all flex gap-5 items-center group/card">
+    <div ref={setNodeRef} style={style} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 hover:shadow-md transition-all flex gap-4 sm:gap-5 items-center group/card relative">
       {SortHandle}
       <div className="w-24 h-16 sm:w-32 sm:h-20 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100">
         <img 
@@ -274,7 +274,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       </div>
       
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 mb-1 min-w-0 overflow-hidden pr-12">
           <img 
             src={faviconUrl} 
             alt="" 
@@ -290,7 +290,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           href={bookmark.url} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-base sm:text-lg font-bold text-gray-900 hover:text-blue-600 line-clamp-2 transition-colors"
+          className="text-base sm:text-lg font-bold text-gray-900 hover:text-blue-600 line-clamp-2 transition-colors pr-8"
         >
           {bookmark.title || bookmark.url}
         </a>
@@ -304,23 +304,23 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         </div>
       </div>
       
-      <div className="flex items-center opacity-0 group-hover/card:opacity-100 transition-all flex-shrink-0">
+      <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-all bg-white/90 backdrop-blur-sm p-1 rounded-xl shadow-sm border border-gray-100">
         {onEdit && (
           <button
             onClick={onEdit}
-            className="p-2 sm:p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
             title="Edit"
           >
-            <Pencil size={20} />
+            <Pencil size={18} />
           </button>
         )}
         <a
           href={bookmark.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="p-2 sm:p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
         >
-          <ExternalLink size={20} />
+          <ExternalLink size={18} />
         </a>
       </div>
     </div>
