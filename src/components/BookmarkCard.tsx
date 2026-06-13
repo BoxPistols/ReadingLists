@@ -290,7 +290,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           href={bookmark.url} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-base sm:text-lg font-bold text-gray-900 hover:text-blue-600 line-clamp-2 transition-colors pr-8"
+          className="text-base font-bold text-gray-900 hover:text-blue-600 line-clamp-2 transition-colors pr-8"
         >
           {bookmark.title || bookmark.url}
         </a>
