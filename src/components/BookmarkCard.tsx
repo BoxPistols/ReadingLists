@@ -40,12 +40,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
-  const renderTags = () => (
-    <div className="flex flex-wrap gap-1.5 items-center">
+  const renderTags = (isCompact = false) => (
+    <div className={`flex flex-wrap gap-1.5 items-center ${isCompact ? 'max-w-[200px]' : ''}`}>
       {bookmark.tags?.map(tag => (
         <span
           key={tag}
-          className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-100 text-gray-600 group/tag hover:bg-blue-50 hover:text-blue-600 transition-colors"
+          className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-100 text-gray-600 group/tag hover:bg-blue-50 hover:text-blue-600 transition-colors whitespace-nowrap"
         >
           <button onClick={() => onTagClick?.(tag)} className="flex items-center gap-1">
             <Tag size={10} />
@@ -88,11 +88,11 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   // AI 分類カテゴリのバッジ。未分類かつ未取得なら「分類中…」を出す。
   const categoryBadge = bookmark.category ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600 whitespace-nowrap flex-shrink-0">
       <Folder size={10} /> {bookmark.category}
     </span>
   ) : !bookmark.ogp?.loaded ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-400">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-400 whitespace-nowrap flex-shrink-0">
       <Loader2 size={10} className="animate-spin" /> 分類中…
     </span>
   ) : null;
@@ -118,14 +118,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         </div>
 
         <div className="p-5 flex flex-col flex-1">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 min-w-0">
             <img 
               src={faviconUrl} 
               alt="" 
-              className="w-4 h-4 rounded-sm"
+              className="w-4 h-4 rounded-sm flex-shrink-0"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 truncate">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 truncate flex-1">
               {hostname}
             </span>
             {categoryBadge}
@@ -142,7 +142,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </div>
           
           <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 whitespace-nowrap">
               <Calendar size={14} />
               <span>{format(date, 'yyyy/MM/dd', { locale: ja })}</span>
             </div>
@@ -171,9 +171,65 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     );
   }
 
+  if (viewMode === 'table') {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-2 hover:shadow-md transition-all flex items-center group/card min-w-0 gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <img 
+            src={faviconUrl} 
+            alt="" 
+            className="w-4 h-4 rounded-sm flex-shrink-0"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+          <div className="flex flex-col min-w-0">
+            <a 
+              href={bookmark.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-sm font-bold text-gray-900 hover:text-blue-600 truncate transition-colors"
+            >
+              {bookmark.title || bookmark.url}
+            </a>
+            <span className="text-[10px] text-gray-400 truncate uppercase tracking-tight">{hostname}</span>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-3">
+          {categoryBadge}
+          <div className="h-4 w-px bg-gray-100" />
+          <div className="flex items-center gap-1.5 text-[10px] text-gray-400 whitespace-nowrap">
+            <Calendar size={12} />
+            <span>{format(date, 'yyyy/MM/dd', { locale: ja })}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-all">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
+          <a
+            href={bookmark.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+          >
+            <ExternalLink size={14} />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Default List View
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-all flex gap-5 items-center group/card">
-      <div className="w-32 h-20 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-gray-50">
+      <div className="w-24 h-16 sm:w-32 sm:h-20 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-gray-50 hidden xs:block">
         <img 
           src={thumbnailUrl} 
           alt=""
@@ -185,29 +241,29 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
       </div>
       
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 min-w-0 overflow-hidden">
           <img 
             src={faviconUrl} 
             alt="" 
-            className="w-3.5 h-3.5 rounded-sm"
+            className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
             }}
           />
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{hostname}</span>
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider truncate">{hostname}</span>
           {categoryBadge}
         </div>
         <a 
           href={bookmark.url} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-lg font-bold text-gray-900 hover:text-blue-600 truncate block transition-colors"
+          className="text-base sm:text-lg font-bold text-gray-900 hover:text-blue-600 truncate block transition-colors"
         >
           {bookmark.title || bookmark.url}
         </a>
         
-        <div className="flex items-center gap-6 mt-2">
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+        <div className="flex flex-wrap items-center gap-y-2 gap-x-6 mt-2">
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 whitespace-nowrap">
             <Calendar size={14} />
             <span>Added on {format(date, 'yyyy年MM月dd日', { locale: ja })}</span>
           </div>
@@ -215,11 +271,11 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
         </div>
       </div>
       
-      <div className="flex items-center opacity-0 group-hover/card:opacity-100 transition-all">
+      <div className="flex items-center opacity-0 group-hover/card:opacity-100 transition-all flex-shrink-0">
         {onEdit && (
           <button
             onClick={onEdit}
-            className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+            className="p-2 sm:p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
             title="Edit"
           >
             <Pencil size={20} />
@@ -229,7 +285,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           href={bookmark.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+          className="p-2 sm:p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
         >
           <ExternalLink size={20} />
         </a>

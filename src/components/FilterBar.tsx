@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid, Tag, Folder, X } from 'lucide-react';
+import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid, Table, Tag, Folder, X } from 'lucide-react';
 import type { ViewMode } from '../types';
 import { clsx } from 'clsx';
 
@@ -143,6 +143,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               "p-1.5 rounded-lg transition-all",
               viewMode === 'list' ? "bg-white shadow-sm text-blue-600" : "text-gray-400 hover:text-gray-600"
             )}
+            title="List View"
           >
             <LayoutList size={18} />
           </button>
@@ -152,8 +153,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               "p-1.5 rounded-lg transition-all",
               viewMode === 'grid' ? "bg-white shadow-sm text-blue-600" : "text-gray-400 hover:text-gray-600"
             )}
+            title="Grid View"
           >
             <LayoutGrid size={18} />
+          </button>
+          <button
+            onClick={() => onViewModeChange('table')}
+            className={clsx(
+              "p-1.5 rounded-lg transition-all",
+              viewMode === 'table' ? "bg-white shadow-sm text-blue-600" : "text-gray-400 hover:text-gray-600"
+            )}
+            title="Table View"
+          >
+            <Table size={18} />
           </button>
         </div>
       </div>

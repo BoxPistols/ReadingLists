@@ -18,7 +18,7 @@ export interface Bookmark {
   };
 }
 
-export type ViewMode = 'list' | 'grid';
+export type ViewMode = 'list' | 'grid' | 'table';
 
 // 同期状態（クラウドアイコン表示用）
 export type SyncStatus = 'synced' | 'pending' | 'offline';
