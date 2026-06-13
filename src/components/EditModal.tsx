@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import type { Bookmark } from '../types';
-import { CATEGORIES } from '../constants/taxonomy';
 import { X, Save, Trash2 } from 'lucide-react';
 
 interface EditModalProps {
   isOpen: boolean;
   bookmark: Bookmark | null;
+  categories: string[];
   onClose: () => void;
   onSave: (id: string, updates: Partial<Bookmark>) => void;
   onDelete: (id: string) => void;
 }
 
-export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose, onSave, onDelete }) => {
+export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, categories, onClose, onSave, onDelete }) => {
   // 親が bookmark 単位で key を付けて再マウントするため、初期値を props から直接導出する
   // （effect 内 setState を避ける）。
   const [formData, setFormData] = useState<Partial<Bookmark>>(() => ({
@@ -91,7 +91,7 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose,
                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
              >
                <option value="">未分類</option>
-               {CATEGORIES.map((cat) => (
+               {categories.map((cat) => (
                  <option key={cat} value={cat}>{cat}</option>
                ))}
              </select>

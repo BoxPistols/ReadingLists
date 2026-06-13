@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { Bookmark, ViewMode } from '../types';
-import { ExternalLink, Calendar, Tag, Plus, X, Pencil, Folder, Loader2 } from 'lucide-react';
+import { ExternalLink, Calendar, Tag, Plus, X, Pencil, Folder, Loader2, GripVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
@@ -12,6 +13,7 @@ interface BookmarkCardProps {
   onAddTag?: (tag: string) => void;
   onRemoveTag?: (tag: string) => void;
   onEdit?: () => void;
+  isSortable?: boolean;
 }
 
 export const BookmarkCard: React.FC<BookmarkCardProps> = ({
@@ -20,14 +22,30 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   onTagClick,
   onAddTag,
   onRemoveTag,
-  onEdit
+  onEdit,
+  isSortable = false
 }) => {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState('');
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: bookmark.id!, disabled: !isSortable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+  };
   
   const date = new Date(bookmark.addDate * 1000);
   const hostname = new URL(bookmark.url).hostname;
-  // Google の favicon サービスを <img> で直接参照（CORS 不要・プロキシ廃止）。
   const faviconUrl = bookmark.icon || `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
   const thumbnailUrl = bookmark.ogp?.image || bookmark.image || `https://api.microlink.io/?url=${encodeURIComponent(bookmark.url)}&screenshot=true&embed=screenshot.url`;
 
@@ -86,7 +104,6 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     </div>
   );
 
-  // AI 分類カテゴリのバッジ。未分類かつ未取得なら「分類中…」を出す。
   const categoryBadge = bookmark.category ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600 whitespace-nowrap flex-shrink-0">
       <Folder size={10} /> {bookmark.category}
@@ -97,9 +114,15 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     </span>
   ) : null;
 
+  const SortHandle = isSortable && (
+    <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-gray-300 hover:text-gray-600">
+      <GripVertical size={20} />
+    </div>
+  );
+
   if (viewMode === 'grid') {
     return (
-      <article className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col h-full">
+      <article ref={setNodeRef} style={style} className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col h-full">
         <div className="relative aspect-[16/10] overflow-hidden bg-gray-50 border-b border-gray-50">
           <img 
             src={thumbnailUrl} 
@@ -115,6 +138,11 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                <ExternalLink size={14} /> View Source
              </span>
           </div>
+          {isSortable && (
+            <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-lg p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {SortHandle}
+            </div>
+          )}
         </div>
 
         <div className="p-5 flex flex-col flex-1">
@@ -173,7 +201,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   if (viewMode === 'table') {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-2 hover:shadow-md transition-all flex items-center group/card min-w-0 gap-4">
+      <div ref={setNodeRef} style={style} className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-2 hover:shadow-md transition-all flex items-center group/card min-w-0 gap-4">
+        {SortHandle}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <img 
             src={faviconUrl} 
@@ -226,10 +255,11 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     );
   }
 
-  // Default List View
+  // Default List View - Updated to show image
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-all flex gap-5 items-center group/card">
-      <div className="w-24 h-16 sm:w-32 sm:h-20 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-gray-50 hidden xs:block">
+    <div ref={setNodeRef} style={style} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-all flex gap-5 items-center group/card">
+      {SortHandle}
+      <div className="w-24 h-16 sm:w-32 sm:h-20 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100">
         <img 
           src={thumbnailUrl} 
           alt=""

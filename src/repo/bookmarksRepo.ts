@@ -79,7 +79,22 @@ export const updateBookmark = async (
   id: string,
   updates: Partial<Bookmark>,
 ) => {
-  await updateDoc(doc(bookmarksCol(uid), id), stripUndefined(updates));
+  await updateDoc(doc(bookmarksCol(uid), id), stripUndefined({
+    ...updates,
+    lastModified: Math.floor(Date.now() / 1000),
+  }));
+};
+
+// 並び替え用の一括更新
+export const updateBookmarkPositions = async (
+  uid: string,
+  positions: Array<{ id: string; order: number }>,
+) => {
+  const batch = writeBatch(db as Firestore);
+  for (const { id, order } of positions) {
+    batch.update(doc(bookmarksCol(uid), id), { order });
+  }
+  await batch.commit();
 };
 
 export const removeBookmark = async (uid: string, id: string) => {
