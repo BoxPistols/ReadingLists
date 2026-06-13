@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid, Tag, X } from 'lucide-react';
+import { Search, ArrowUpDown, Calendar, LayoutList, LayoutGrid, Tag, Folder, X } from 'lucide-react';
 import type { ViewMode } from '../types';
 import { clsx } from 'clsx';
 
@@ -10,6 +10,7 @@ export interface FilterState {
   startDate: string;
   endDate: string;
   selectedTag: string;
+  selectedCategory: string;
 }
 
 interface FilterBarProps {
@@ -19,15 +20,17 @@ interface FilterBarProps {
   onViewModeChange: (mode: ViewMode) => void;
   totalCount: number;
   availableTags: string[];
+  availableCategories: string[];
 }
 
-export const FilterBar: React.FC<FilterBarProps> = ({ 
-  filter, 
-  onChange, 
-  viewMode, 
-  onViewModeChange, 
+export const FilterBar: React.FC<FilterBarProps> = ({
+  filter,
+  onChange,
+  viewMode,
+  onViewModeChange,
   totalCount,
-  availableTags
+  availableTags,
+  availableCategories
 }) => {
   const handleChange = (key: keyof FilterState, value: string) => {
     onChange({ ...filter, [key]: value });
@@ -73,6 +76,23 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             onChange={(e) => handleChange('endDate', e.target.value)}
             className="bg-transparent text-xs outline-none text-gray-600 cursor-pointer"
           />
+        </div>
+
+        <div className="h-8 w-px bg-gray-100 mx-1 hidden md:block" />
+
+        {/* Category Filter */}
+        <div className="flex items-center gap-1.5 bg-gray-50/50 p-1 rounded-xl border border-transparent">
+          <Folder size={16} className="text-gray-400 ml-2" />
+          <select
+            value={filter.selectedCategory}
+            onChange={(e) => handleChange('selectedCategory', e.target.value)}
+            className="bg-transparent text-xs font-medium text-gray-600 px-2 py-1 cursor-pointer outline-none min-w-[110px]"
+          >
+            <option value="">All Categories</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
         </div>
 
         <div className="h-8 w-px bg-gray-100 mx-1 hidden md:block" />

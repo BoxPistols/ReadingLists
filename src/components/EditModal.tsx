@@ -1,39 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import type { Bookmark } from '../types';
+import { CATEGORIES } from '../constants/taxonomy';
 import { X, Save, Trash2 } from 'lucide-react';
 
 interface EditModalProps {
   isOpen: boolean;
   bookmark: Bookmark | null;
   onClose: () => void;
-  onSave: (id: number, updates: Partial<Bookmark>) => void;
-  onDelete: (id: number) => void;
+  onSave: (id: string, updates: Partial<Bookmark>) => void;
+  onDelete: (id: string) => void;
 }
 
 export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose, onSave, onDelete }) => {
-  const [formData, setFormData] = useState<Partial<Bookmark>>({});
+  // 親が bookmark 単位で key を付けて再マウントするため、初期値を props から直接導出する
+  // （effect 内 setState を避ける）。
+  const [formData, setFormData] = useState<Partial<Bookmark>>(() => ({
+    title: bookmark?.title,
+    url: bookmark?.url,
+    category: bookmark?.category,
+  }));
+  // タグは生の文字列として保持し、保存時にだけ配列化する。
+  // （配列に即時変換するとカンマ・末尾スペースが入力中に消える）
+  const [tagsInput, setTagsInput] = useState(() => (bookmark?.tags || []).join(', '));
 
   useEffect(() => {
-    if (bookmark) {
-      setFormData({
-        title: bookmark.title,
-        url: bookmark.url,
-        tags: bookmark.tags || [],
-      });
-    }
-
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     if (isOpen) window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [bookmark, isOpen, onClose]);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !bookmark || bookmark.id === undefined) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(bookmark.id!, formData);
+    const tags = tagsInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    onSave(bookmark.id!, { ...formData, tags });
     onClose();
   };
 
@@ -78,11 +84,25 @@ export const EditModal: React.FC<EditModalProps> = ({ isOpen, bookmark, onClose,
           </div>
 
           <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+             <select
+               value={formData.category || ''}
+               onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value || undefined }))}
+               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+             >
+               <option value="">未分類</option>
+               {CATEGORIES.map((cat) => (
+                 <option key={cat} value={cat}>{cat}</option>
+               ))}
+             </select>
+          </div>
+
+          <div>
              <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
              <input
                type="text"
-               value={formData.tags?.join(', ') || ''}
-               onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))}
+               value={tagsInput}
+               onChange={(e) => setTagsInput(e.target.value)}
                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                placeholder="React, Design, Tech"
              />

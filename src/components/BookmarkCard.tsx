@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Bookmark, ViewMode } from '../types';
-import { ExternalLink, Calendar, Tag, Plus, X } from 'lucide-react';
+import { ExternalLink, Calendar, Tag, Plus, X, Pencil, Folder, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -11,21 +11,24 @@ interface BookmarkCardProps {
   onTagClick?: (tag: string) => void;
   onAddTag?: (tag: string) => void;
   onRemoveTag?: (tag: string) => void;
+  onEdit?: () => void;
 }
 
-export const BookmarkCard: React.FC<BookmarkCardProps> = ({ 
-  bookmark, 
-  viewMode, 
+export const BookmarkCard: React.FC<BookmarkCardProps> = ({
+  bookmark,
+  viewMode,
   onTagClick,
   onAddTag,
-  onRemoveTag
+  onRemoveTag,
+  onEdit
 }) => {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState('');
   
   const date = new Date(bookmark.addDate * 1000);
   const hostname = new URL(bookmark.url).hostname;
-  const faviconUrl = bookmark.icon || `http://localhost:3005/api/favicon?domain=${hostname}`;
+  // Google の favicon サービスを <img> で直接参照（CORS 不要・プロキシ廃止）。
+  const faviconUrl = bookmark.icon || `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
   const thumbnailUrl = bookmark.ogp?.image || bookmark.image || `https://api.microlink.io/?url=${encodeURIComponent(bookmark.url)}&screenshot=true&embed=screenshot.url`;
 
   const handleAddTagSubmit = (e: React.FormEvent) => {
@@ -37,7 +40,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     }
   };
 
-  const TagList = () => (
+  const renderTags = () => (
     <div className="flex flex-wrap gap-1.5 items-center">
       {bookmark.tags?.map(tag => (
         <span
@@ -83,6 +86,17 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     </div>
   );
 
+  // AI 分類カテゴリのバッジ。未分類かつ未取得なら「分類中…」を出す。
+  const categoryBadge = bookmark.category ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600">
+      <Folder size={10} /> {bookmark.category}
+    </span>
+  ) : !bookmark.ogp?.loaded ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-400">
+      <Loader2 size={10} className="animate-spin" /> 分類中…
+    </span>
+  ) : null;
+
   if (viewMode === 'grid') {
     return (
       <article className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col h-full">
@@ -109,11 +123,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               src={faviconUrl} 
               alt="" 
               className="w-4 h-4 rounded-sm"
-              onError={(e) => (e.target as any).style.display='none'}
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
             <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 truncate">
               {hostname}
             </span>
+            {categoryBadge}
           </div>
           
           <h3 className="text-lg font-bold text-gray-900 leading-snug mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
@@ -123,7 +138,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </h3>
 
           <div className="mb-4">
-            <TagList />
+            {renderTags()}
           </div>
           
           <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
@@ -131,14 +146,25 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
               <Calendar size={14} />
               <span>{format(date, 'yyyy/MM/dd', { locale: ja })}</span>
             </div>
-            <a 
-              href={bookmark.url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-            >
-              <ExternalLink size={16} />
-            </a>
+            <div className="flex items-center">
+              {onEdit && (
+                <button
+                  onClick={onEdit}
+                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                  title="Edit"
+                >
+                  <Pencil size={16} />
+                </button>
+              )}
+              <a
+                href={bookmark.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+              >
+                <ExternalLink size={16} />
+              </a>
+            </div>
           </div>
         </div>
       </article>
@@ -169,6 +195,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             }}
           />
           <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{hostname}</span>
+          {categoryBadge}
         </div>
         <a 
           href={bookmark.url} 
@@ -184,18 +211,29 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             <Calendar size={14} />
             <span>Added on {format(date, 'yyyy年MM月dd日', { locale: ja })}</span>
           </div>
-          <TagList />
+          {renderTags()}
         </div>
       </div>
       
-      <a 
-        href={bookmark.url} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all opacity-0 group-hover/card:opacity-100"
-      >
-        <ExternalLink size={20} />
-      </a>
+      <div className="flex items-center opacity-0 group-hover/card:opacity-100 transition-all">
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+            title="Edit"
+          >
+            <Pencil size={20} />
+          </button>
+        )}
+        <a
+          href={bookmark.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+        >
+          <ExternalLink size={20} />
+        </a>
+      </div>
     </div>
   );
 };

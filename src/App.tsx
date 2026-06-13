@@ -1,13 +1,23 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from './db';
-import type { ViewMode } from './types';
+import type { Bookmark, ViewMode } from './types';
+import { useAuth } from './auth/AuthContext';
+import { useBookmarks } from './hooks/useBookmarks';
+import {
+  addBookmark,
+  bulkAddBookmarks,
+  updateBookmark,
+  removeBookmark,
+  clearAllBookmarks,
+} from './repo/bookmarksRepo';
 import { parseBookmarks } from './utils/parser';
-import { fetchOGP } from './utils/ogp';
 import { UploadArea } from './components/UploadArea';
 import { BookmarkCard } from './components/BookmarkCard';
 import { FilterBar, type FilterState } from './components/FilterBar';
-import { Download, HelpCircle, Globe, Trash2, RefreshCw, Plus } from 'lucide-react';
+import { EditModal } from './components/EditModal';
+import { UrlAddBar } from './components/UrlAddBar';
+import { AuthButton } from './components/AuthButton';
+import { SyncIndicator } from './components/SyncIndicator';
+import { Download, HelpCircle, Globe, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { startOfDay, endOfDay, isWithinInterval, format, subDays } from 'date-fns';
 import { clsx } from 'clsx';
 
@@ -32,7 +42,7 @@ const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
           <li>Select "Export Bookmarks"</li>
           <li>Upload the exported HTML file here</li>
         </ol>
-        <button 
+        <button
           onClick={onClose}
           className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
         >
@@ -44,11 +54,12 @@ const HelpModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
 };
 
 function App() {
-  const bookmarks = useLiveQuery(() => db.bookmarks.toArray()) || [];
+  const { user, loading: authLoading } = useAuth();
+  const { bookmarks, status, loaded } = useBookmarks();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
-  
+  const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+
   // Default to 365 days ago
   const defaultStartDate = useMemo(() => format(subDays(new Date(), 365), 'yyyy-MM-dd'), []);
 
@@ -59,11 +70,18 @@ function App() {
     startDate: defaultStartDate,
     endDate: '',
     selectedTag: '',
+    selectedCategory: '',
   });
 
   const handleFileLoaded = async (content: string) => {
+    if (!user) return;
     const parsed = parseBookmarks(content);
-    await db.bookmarks.bulkPut(parsed);
+    // 再インポート時の重複を URL で除外する。
+    const existingUrls = new Set(bookmarks.map((b) => b.url));
+    const fresh = parsed.filter((b) => !existingUrls.has(b.url));
+    if (fresh.length > 0) {
+      await bulkAddBookmarks(user.uid, fresh);
+    }
   };
 
   const handleExport = () => {
@@ -76,77 +94,85 @@ function App() {
     a.click();
   };
 
-  const handleAddTag = async (id: number, tag: string) => {
-    const bookmark = await db.bookmarks.get(id);
+  const handleAddTag = async (id: string, tag: string) => {
+    if (!user) return;
+    const bookmark = bookmarks.find((b) => b.id === id);
     if (bookmark) {
       const currentTags = bookmark.tags || [];
       if (!currentTags.includes(tag)) {
-        await db.bookmarks.update(id, { tags: [...currentTags, tag] });
+        await updateBookmark(user.uid, id, { tags: [...currentTags, tag] });
       }
     }
   };
 
-  const handleRemoveTag = async (id: number, tagToRemove: string) => {
-    const bookmark = await db.bookmarks.get(id);
+  const handleRemoveTag = async (id: string, tagToRemove: string) => {
+    if (!user) return;
+    const bookmark = bookmarks.find((b) => b.id === id);
     if (bookmark) {
-      await db.bookmarks.update(id, { 
-        tags: (bookmark.tags || []).filter(t => t !== tagToRemove) 
+      await updateBookmark(user.uid, id, {
+        tags: (bookmark.tags || []).filter((t) => t !== tagToRemove),
       });
     }
   };
 
   const handleClearAll = async () => {
+    if (!user) return;
     if (confirm('Are you sure you want to clear all data?')) {
-      await db.bookmarks.clear();
+      await clearAllBookmarks(user.uid);
     }
   };
 
-  // OGP fetcher with race condition protection
-  useEffect(() => {
-    if (isFetchingMetadata) return;
+  const handleSaveEdit = async (id: string, updates: Partial<Bookmark>) => {
+    if (!user) return;
+    await updateBookmark(user.uid, id, updates);
+  };
 
-    const fetchMetadataBatch = async () => {
-      const pending = bookmarks.filter(b => b.id && !b.ogp?.loaded).slice(0, 5);
-      if (pending.length === 0) return;
+  const handleDeleteOne = async (id: string) => {
+    if (!user) return;
+    await removeBookmark(user.uid, id);
+  };
 
-      setIsFetchingMetadata(true);
-      try {
-        for (const b of pending) {
-          if (!b.id) continue;
-          try {
-            const ogpData = await fetchOGP(b.url);
-            await db.bookmarks.update(b.id, { 
-              ogp: { ...(ogpData || {}), loaded: true } 
-            });
-          } catch (e) {
-            await db.bookmarks.update(b.id, { ogp: { loaded: true } });
-          }
-          // Throttling to be polite and avoid rate limits
-          await new Promise(resolve => setTimeout(resolve, 800));
-        }
-      } finally {
-        setIsFetchingMetadata(false);
-      }
-    };
-
-    fetchMetadataBatch();
-  }, [bookmarks.filter(b => !b.ogp?.loaded).length, isFetchingMetadata]);
+  const handleAddUrl = async (url: string) => {
+    if (!user) return;
+    // タイトルは暫定で URL。OGP 取得後に Cloud Function 側で上書きされる想定だが、
+    // 表示用に hostname を初期タイトルにしておく。
+    let initialTitle = url;
+    try {
+      initialTitle = new URL(url).hostname;
+    } catch {
+      /* noop */
+    }
+    await addBookmark(user.uid, {
+      title: initialTitle,
+      url,
+      addDate: Math.floor(Date.now() / 1000),
+      tags: [],
+    });
+  };
 
   const availableTags = useMemo(() => {
     const tags = new Set<string>();
-    bookmarks.forEach(b => {
-      b.tags?.forEach(t => tags.add(t));
+    bookmarks.forEach((b) => {
+      b.tags?.forEach((t) => tags.add(t));
     });
     return Array.from(tags).sort();
+  }, [bookmarks]);
+
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    bookmarks.forEach((b) => {
+      if (b.category) cats.add(b.category);
+    });
+    return Array.from(cats).sort();
   }, [bookmarks]);
 
   const filteredBookmarks = useMemo(() => {
     return bookmarks
       .filter((b) => {
         const searchTerms = filter.search.toLowerCase().split(/\s+/).filter(Boolean);
-        const matchesSearch = searchTerms.every(term => 
-          b.title.toLowerCase().includes(term) || 
-          b.url.toLowerCase().includes(term)
+        const matchesSearch = searchTerms.every(
+          (term) =>
+            b.title.toLowerCase().includes(term) || b.url.toLowerCase().includes(term),
         );
 
         let matchesDate = true;
@@ -159,7 +185,9 @@ function App() {
 
         const matchesTag = !filter.selectedTag || (b.tags && b.tags.includes(filter.selectedTag));
 
-        return matchesSearch && matchesDate && matchesTag;
+        const matchesCategory = !filter.selectedCategory || b.category === filter.selectedCategory;
+
+        return matchesSearch && matchesDate && matchesTag && matchesCategory;
       })
       .sort((a, b) => {
         let comparison = 0;
@@ -172,10 +200,30 @@ function App() {
       });
   }, [bookmarks, filter]);
 
+  // 認証 + 初回購読が完了するまでローディング表示。
+  if (authLoading || !loaded) {
+    return (
+      <div className="min-h-screen bg-gray-50/50 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-gray-400">
+          <Loader2 className="animate-spin" size={24} />
+          <span className="font-medium">Loading your reading list...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50/50 py-12 px-4 sm:px-6 lg:px-8">
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
-      
+      <EditModal
+        key={editingBookmark?.id}
+        isOpen={editingBookmark !== null}
+        bookmark={editingBookmark}
+        onClose={() => setEditingBookmark(null)}
+        onSave={handleSaveEdit}
+        onDelete={handleDeleteOne}
+      />
+
       <div className="max-w-[1600px] mx-auto">
         <header className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
           <div className="flex items-center gap-4">
@@ -187,25 +235,9 @@ function App() {
               <p className="text-sm text-gray-400 font-medium">Manage and organize your curated content</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                const url = prompt('Enter URL:');
-                if (url) {
-                  db.bookmarks.add({
-                    title: url,
-                    url,
-                    addDate: Math.floor(Date.now() / 1000),
-                    tags: []
-                  });
-                }
-              }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-bold shadow-sm"
-            >
-              <Plus size={18} />
-              Add URL
-            </button>
+            <SyncIndicator status={status} />
             {bookmarks.length > 0 && (
               <button
                 onClick={handleExport}
@@ -222,82 +254,99 @@ function App() {
             >
               <HelpCircle size={24} />
             </button>
+            <AuthButton />
           </div>
         </header>
 
         {bookmarks.length === 0 ? (
-          <UploadArea onFileLoaded={handleFileLoaded} />
+          <div className="space-y-6 max-w-3xl mx-auto">
+            <div className="text-center mb-2">
+              <h2 className="text-xl font-bold text-gray-800">URL を追加して始めましょう</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                貼り付けるだけで OGP 取得と AI 分類を自動で行います
+              </p>
+            </div>
+            <UrlAddBar onAdd={handleAddUrl} />
+            <div className="flex items-center gap-3 text-xs text-gray-300 uppercase tracking-widest">
+              <div className="h-px bg-gray-100 flex-1" />
+              または HTML から一括インポート
+              <div className="h-px bg-gray-100 flex-1" />
+            </div>
+            <UploadArea onFileLoaded={handleFileLoaded} />
+          </div>
         ) : (
           <div className="space-y-8">
+            <UrlAddBar onAdd={handleAddUrl} />
+
             <div className="flex justify-between items-center">
-               <div className="flex gap-4">
-                 <button 
-                   onClick={handleClearAll}
-                   className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
-                 >
-                   <Trash2 size={14} />
-                   Clear All Data
-                 </button>
-                 <button 
-                   onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = '.html';
-                      input.onchange = (e) => {
-                        const file = (e.target as HTMLInputElement).files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => handleFileLoaded(event.target?.result as string);
-                          reader.readAsText(file);
-                        }
-                      };
-                      input.click();
-                   }}
-                   className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest flex items-center gap-1.5"
-                 >
-                   <RefreshCw size={14} />
-                   Import More
-                 </button>
-               </div>
-               {isFetchingMetadata && (
-                 <div className="flex items-center gap-2 text-xs text-blue-600 font-medium animate-pulse">
-                   <RefreshCw size={12} className="animate-spin" />
-                   Updating bookmark info...
-                 </div>
-               )}
+              <div className="flex gap-4">
+                <button
+                  onClick={handleClearAll}
+                  className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                >
+                  <Trash2 size={14} />
+                  Clear All Data
+                </button>
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.html';
+                    input.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => handleFileLoaded(event.target?.result as string);
+                        reader.readAsText(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                >
+                  <RefreshCw size={14} />
+                  Import More
+                </button>
+              </div>
             </div>
-            
-            <FilterBar 
-              filter={filter} 
-              onChange={setFilter} 
+
+            <FilterBar
+              filter={filter}
+              onChange={setFilter}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              totalCount={filteredBookmarks.length} 
+              totalCount={filteredBookmarks.length}
               availableTags={availableTags}
+              availableCategories={availableCategories}
             />
 
-            <main className={clsx(
-              "grid gap-6 transition-all duration-500",
-              viewMode === 'grid' 
-                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" 
-                : "grid-cols-1 lg:grid-cols-2 xl:grid-cols-3"
-            )}>
+            <main
+              className={clsx(
+                'grid gap-6 transition-all duration-500',
+                viewMode === 'grid'
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                  : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3',
+              )}
+            >
               {filteredBookmarks.length > 0 ? (
                 filteredBookmarks.map((bookmark) => (
-                  <BookmarkCard 
-                    key={bookmark.id} 
-                    bookmark={bookmark} 
+                  <BookmarkCard
+                    key={bookmark.id}
+                    bookmark={bookmark}
                     viewMode={viewMode}
-                    onTagClick={(tag) => setFilter(prev => ({ ...prev, selectedTag: tag }))}
+                    onTagClick={(tag) => setFilter((prev) => ({ ...prev, selectedTag: tag }))}
                     onAddTag={(tag) => handleAddTag(bookmark.id!, tag)}
                     onRemoveTag={(tag) => handleRemoveTag(bookmark.id!, tag)}
+                    onEdit={() => setEditingBookmark(bookmark)}
                   />
                 ))
               ) : (
-                <div className={clsx(
-                  "text-center py-32 text-gray-300 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center",
-                  "col-span-full"
-                )}>
+                <div
+                  className={clsx(
+                    'text-center py-32 text-gray-300 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center',
+                    'col-span-full',
+                  )}
+                >
                   <Globe className="w-16 h-16 mb-4 opacity-10" />
                   <p className="text-xl font-medium">No results found</p>
                   <p className="text-sm">Try adjusting your search or filters (Current: last 365 days)</p>
