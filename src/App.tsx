@@ -85,7 +85,7 @@ function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [customCategories, setCustomCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
 
   // Default to 365 days ago
   const defaultStartDate = useMemo(() => format(subDays(new Date(), 365), 'yyyy-MM-dd'), []);
@@ -145,23 +145,23 @@ function App() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+const handleDragEnd = async (event: DragEndEvent) => {
+  const { active, over } = event;
+  if (user && over && active.id !== over.id) {
+    const oldIndex = sortedBookmarks.findIndex((b) => b.id === active.id);
+    const newIndex = sortedBookmarks.findIndex((b) => b.id === over.id);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (user && over && active.id !== over.id) {
-      const oldIndex = sortedBookmarks.findIndex((b) => b.id === active.id);
-      const newIndex = sortedBookmarks.findIndex((b) => b.id === over.id);
+    const newOrder = arrayMove(sortedBookmarks, oldIndex, newIndex);
 
-      const newOrder = arrayMove(sortedBookmarks, oldIndex, newIndex);
-      
-      const positions = newOrder.map((b, index) => ({
-        id: b.id!,
-        order: index,
-      }));
+    // ソート順が降順 (desc) の場合、見た目の index 0 が order の最大値になるように調整
+    const positions = newOrder.map((b, index) => ({
+      id: b.id!,
+      order: filter.sortOrder === 'desc' ? newOrder.length - 1 - index : index,
+    }));
 
-      await updateBookmarkPositions(user.uid, positions);
-    }
-  };
+    await updateBookmarkPositions(user.uid, positions);
+  }
+};
 
   const handleFileLoaded = async (content: string) => {
     if (!user) return;
@@ -213,7 +213,15 @@ function App() {
 
   const handleSaveEdit = async (id: string, updates: Partial<Bookmark>) => {
     if (!user) return;
-    await updateBookmark(user.uid, id, updates);
+    const bookmark = bookmarks.find(b => b.id === id);
+    // 既存の ogp 情報を保持しつつ loaded を true にする
+    await updateBookmark(user.uid, id, {
+      ...updates,
+      ogp: {
+        ...(bookmark?.ogp || {}),
+        loaded: true
+      }
+    });
   };
 
   const handleDeleteOne = async (id: string) => {

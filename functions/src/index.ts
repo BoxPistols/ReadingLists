@@ -50,26 +50,14 @@ const classify = async (
   const client = new Anthropic({ apiKey });
 
   const response = await client.messages.create({
-    model: 'claude-opus-4-8',
+    model: 'claude-3-5-sonnet-20241022',
     max_tokens: 512,
-    output_config: {
-      effort: 'low',
-      format: {
-        type: 'json_schema',
-        schema: {
-          type: 'object',
-          properties: {
-            category: { type: 'string', enum: [...CATEGORIES] },
-            tags: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['category', 'tags'],
-          additionalProperties: false,
-        },
-      },
-    },
     system:
       'あなたはブックマークURLを分類するアシスタントです。与えられたページ情報から、' +
-      `指定カテゴリ一覧の中から最も適切な単一カテゴリを1つ選び、内容を表す日本語タグを最大5個（簡潔な単語）付与してください。カテゴリ一覧: ${CATEGORIES.join(', ')}`,
+      `指定カテゴリ一覧の中から最も適切な単一カテゴリを1つ選び、内容を表す日本語タグを最大5個（簡潔な単語）付与してください。` +
+      `出力は必ず以下のJSON形式のみで行ってください（思考プロセスなどは不要です）。\n` +
+      `{"category": "...", "tags": ["tag1", "tag2"]}\n\n` +
+      `カテゴリ一覧: ${CATEGORIES.join(', ')}`,
     messages: [
       {
         role: 'user',
@@ -84,8 +72,14 @@ const classify = async (
 
   const textBlock = response.content.find((b) => b.type === 'text');
   if (!textBlock || textBlock.type !== 'text') return null;
-  const parsed = JSON.parse(textBlock.text) as { category: string; tags: string[] };
-  return parsed;
+  
+  try {
+    const parsed = JSON.parse(textBlock.text) as { category: string; tags: string[] };
+    return parsed;
+  } catch (err) {
+    logger.error('JSON parse error from Claude', textBlock.text);
+    return null;
+  }
 };
 
 // 追加されたブックマークの URL を 1 回だけ取得し、OGP と AI 分類を doc に書き戻す。

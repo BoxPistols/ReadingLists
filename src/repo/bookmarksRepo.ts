@@ -55,7 +55,11 @@ export const subscribeBookmarks = (
 };
 
 export const addBookmark = async (uid: string, data: Omit<Bookmark, 'id'>) => {
-  const ref = await addDoc(bookmarksCol(uid), stripUndefined(data));
+  const now = Math.floor(Date.now() / 1000);
+  const ref = await addDoc(bookmarksCol(uid), stripUndefined({
+    ...data,
+    lastModified: now,
+  }));
   return ref.id;
 };
 
@@ -64,11 +68,15 @@ export const bulkAddBookmarks = async (
   uid: string,
   items: Array<Omit<Bookmark, 'id'>>,
 ) => {
+  const now = Math.floor(Date.now() / 1000);
   for (let i = 0; i < items.length; i += FIRESTORE_BATCH_LIMIT) {
     const batch = writeBatch(db as Firestore);
     const chunk = items.slice(i, i + FIRESTORE_BATCH_LIMIT);
     for (const item of chunk) {
-      batch.set(doc(bookmarksCol(uid)), stripUndefined(item));
+      batch.set(doc(bookmarksCol(uid)), stripUndefined({
+        ...item,
+        lastModified: now,
+      }));
     }
     await batch.commit();
   }

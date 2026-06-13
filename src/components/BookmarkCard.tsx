@@ -104,11 +104,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     </div>
   );
 
+  // 2分以上経過しても分類が終わらない場合は AI 分類失敗とみなして表示を消す。
+  const isStuckClassifying = !bookmark.category && !bookmark.ogp?.loaded && (Date.now() / 1000 - bookmark.addDate > 120);
+
   const categoryBadge = bookmark.category ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600 whitespace-nowrap flex-shrink-0">
       <Folder size={10} /> {bookmark.category}
     </span>
-  ) : !bookmark.ogp?.loaded ? (
+  ) : (!bookmark.ogp?.loaded && !isStuckClassifying) ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-400 whitespace-nowrap flex-shrink-0">
       <Loader2 size={10} className="animate-spin" /> 分類中…
     </span>
@@ -287,7 +290,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           href={bookmark.url} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-base sm:text-lg font-bold text-gray-900 hover:text-blue-600 truncate block transition-colors"
+          className="text-base sm:text-lg font-bold text-gray-900 hover:text-blue-600 line-clamp-2 transition-colors"
         >
           {bookmark.title || bookmark.url}
         </a>
